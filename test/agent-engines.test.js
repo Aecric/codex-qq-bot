@@ -23,6 +23,8 @@ test("active agent description reports what the selected engine really runs", ()
     engine: "claude",
     name: "Claude Code",
     runtime: "claude-code-stream-json",
+    transport: "cli",
+    keyName: null,
     model: "opus",
     reasoningEffort: "low",
     reportsQuota: false,
@@ -33,6 +35,10 @@ test("active agent description reports what the selected engine really runs", ()
   assert.equal(codex.reportsQuota, true);
   assert.equal(codex.modelCatalog, true);
   assert.equal(getAgentEngine("unknown").id, "codex");
+  const deepseek = describeAgentEngine("deepseek", { deepseekModel: "deepseek-v4-pro" });
+  assert.equal(deepseek.transport, "api");
+  assert.equal(deepseek.keyName, "DEEPSEEK_API_KEY");
+  assert.equal(describeAgentEngine("gemini").keyName, "GEMINI_API_KEY");
   assert.equal(formatAgentEngineSummary(describeAgentEngine("claude", settings)), "Claude Code · opus / low");
 });
 

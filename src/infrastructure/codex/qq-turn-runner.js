@@ -2,6 +2,7 @@ import { runCodexAppServerTurn } from "../../codex-app-server-turn.js";
 import { buildIsolatedCodexChildEnv } from "../../codex-child-env.js";
 import { buildIsolatedClaudeChildEnv } from "../claude/claude-child-env.js";
 import { isClaudeThreadId, runClaudeCodeTurn } from "../claude/claude-code-turn.js";
+import { runChatApiTurn } from "../chat-api/chat-api-turn.js";
 import { runQqCodexTurnWithFusionRecovery } from "../../qq-codex-turn-recovery.js";
 import { summarizeProcessDiagnostics } from "../../process-diagnostics.js";
 import { buildQqOperationLogDetails } from "../../qq-operation-log.js";
@@ -9,7 +10,18 @@ import { AGENT_LOG_CATEGORY, getAgentEngine } from "../agent/agent-engines.js";
 import { assertAgentTurnNotNested, runAgentToolCall } from "../agent/agent-tool-context.js";
 import { buildCodexLeanQqConfig } from "./codex-lean-config.js";
 
-// Every difference between the two engines lives in this table (display
+// API engines keep no session: any stored thread is ignored and the turn starts
+// from the full prompt. Their QQ tools go straight into the request.
+const chatApiEngine = (id) => Object.freeze({
+  ...getAgentEngine(id),
+  runTurn: (options) => runChatApiTurn({ ...options, provider: id, connection: options.chatApiConnections?.[id] }),
+  buildEnv: () => undefined,
+  canResume: () => false,
+  buildConfig: (config) => config,
+  resolveToolTransport: () => "direct"
+});
+
+// Every difference between the engines lives in this table (display
 // facts and model selection come from agent-engines.js); the runner below
 // stays engine-neutral. Both adapters share one options/result contract.
 const qqAgentEngines = Object.freeze({
@@ -34,7 +46,9 @@ const qqAgentEngines = Object.freeze({
     // Claude Code always serves QQ tools over MCP and has no Codex config.
     buildConfig: (config) => config,
     resolveToolTransport: () => "mcp"
-  })
+  }),
+  deepseek: chatApiEngine("deepseek"),
+  gemini: chatApiEngine("gemini")
 });
 
 export function selectQqAgentEngine(engine) {
@@ -55,6 +69,10 @@ export function createQqCodexTurnRunner({
   claudePath = "claude",
   claudeModel = null,
   claudeReasoningEffort = null,
+  deepseekModel = null,
+  geminiAgentModel = null,
+  chatApiConnections = {},
+  webSearch = null,
   toolTransport = "mcp",
   leanContext = false,
   activeChildren,
@@ -94,7 +112,7 @@ export function createQqCodexTurnRunner({
       // A background task may pin its own model and effort (the local interest
       // judge runs on a small model) without touching the reply settings.
       const ai = options.aiOverride ? { ...state.ai, ...options.aiOverride } : state.ai;
-      const engineSettings = { ai, claudeModel, claudeReasoningEffort };
+      const engineSettings = { ai, claudeModel, claudeReasoningEffort, deepseekModel, geminiAgentModel };
       const model = agent.selectModel(engineSettings);
       const reasoningEffort = agent.selectReasoningEffort(engineSettings);
       try {
@@ -102,6 +120,8 @@ export function createQqCodexTurnRunner({
         const runAttempt = (attempt = {}) => agent.runTurn({
           codexPath,
           claudePath,
+          chatApiConnections,
+          webSearch,
           cwd: options.cwd,
           env: agent.buildEnv({ overrides: options.env }),
           model,

@@ -107,7 +107,7 @@ test("selects the agent engine and Claude Code defaults from the environment", (
   assert.equal(claude.claudeModel, "sonnet");
   assert.equal(claude.claudeReasoningEffort, "xhigh");
 
-  assert.equal(createEnvironmentConfig({ CODEX_REMOTE_CONTACT_AGENT_ENGINE: "gemini" }).agentEngine, "codex");
+  assert.equal(createEnvironmentConfig({ CODEX_REMOTE_CONTACT_AGENT_ENGINE: "llama" }).agentEngine, "codex");
   assert.equal(createEnvironmentConfig({ CODEX_REMOTE_CONTACT_CLAUDE_EFFORT: "turbo" }).claudeReasoningEffort, null);
 });
 

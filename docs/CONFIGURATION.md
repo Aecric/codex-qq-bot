@@ -193,13 +193,28 @@ The Hub classifies each Codex task and scales its base deadline by the current r
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `CODEX_REMOTE_CONTACT_AGENT_ENGINE` | `codex` | Engine that drives the bot: `codex` or `claude`. The repository `ncc engine` command and an interactive `ncc start` write it to `config/local.env` |
+| `CODEX_REMOTE_CONTACT_AGENT_ENGINE` | `codex` | Engine that drives the bot: `codex`, `claude`, `deepseek` or `gemini`. The repository `ncc engine` command and an interactive `ncc start` write it to `config/local.env` |
+| `DEEPSEEK_API_KEY` | empty | API key for the `deepseek` engine, also used by the interest judge |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | DeepSeek endpoint, also used by the interest judge |
+| `CODEX_REMOTE_CONTACT_DEEPSEEK_MODEL` | `deepseek-v4-pro` | Main model for the `deepseek` engine |
+| `GEMINI_API_KEY` | empty | API key for the `gemini` engine, also used by the Gemini second-opinion tool |
+| `GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Gemini OpenAI-compatible endpoint; can point at your relay |
+| `CODEX_REMOTE_CONTACT_GEMINI_AGENT_MODEL` | `gemini-3.8-flash` | Main model for the `gemini` engine; `CODEX_REMOTE_CONTACT_GEMINI_MODEL` still only controls the second-opinion tool |
 | `CLAUDE_CLI_PATH` | `claude` | Claude Code executable, looked up on `PATH` by default |
 | `CODEX_REMOTE_CONTACT_CLAUDE_MODEL` | `opus` | Model for Claude Code: an alias (`opus`, `sonnet`, `haiku`) or a full model name |
 | `CODEX_REMOTE_CONTACT_CLAUDE_EFFORT` | empty | Claude Code reasoning effort: `low`, `medium`, `high`, `xhigh` or `max`. When empty it follows the bot's `ai.reasoningEffort` (`minimal` maps to `low`, `ultra` to `max`) |
 | `CLAUDE_ENV_FILE` | `~/.claude/ncc-profiles/active.env` | Optional Claude connection profile. When the file exists, its connection variables such as `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL` replace inherited ones and are re-read every turn; without it the machine's own `claude` sign-in is used |
 
 With Claude Code, `ai.model`, the reasoning summary, the Codex personality and the service tier have no effect, and quota information only applies to Codex. The task deadlines above still apply, but every turn starts a new `claude -p` process and its cold start counts against the deadline. Claude children inherit only the variables they need to run plus `CODEX_REMOTE_CONTACT_*` markers (except names containing KEY, TOKEN, SECRET, PASSWORD or COOKIE); other Hub secrets are not passed on.
+
+With `deepseek` or `gemini` no local CLI is needed: the Hub calls their OpenAI-compatible API directly and runs the tool loop itself. Differences from the CLI engines:
+
+- There is no shell. Files are reached only through built-in list, read and write tools, confined to the turn's working directories; read-only tasks do not get these tools.
+- There is no server-side session. Every turn sends the full context, persistent-session settings have no effect, and token use is higher.
+- The dashboard's Settings page can switch engines, set the model, API key and API address, and restart the Hub. These are written to `config/local.env` (mode 600) and can only be changed on the computer running the Hub; a saved key is never shown. The API address must use HTTPS unless it is on this computer.
+- Web access uses the Hub's own search. DeepSeek is currently treated as having no vision, so images become text placeholders.
+- `ai.reasoningEffort` is mapped to each provider's levels: on DeepSeek `none` and `minimal` turn thinking off, `low` to `high` become `high`, and anything above becomes `max`; on Gemini `medium` is kept, the rest become `low` or `high`, and a rejected level is dropped and retried.
+- Node's `fetch` ignores `HTTPS_PROXY` by default. If you need a proxy, use Node 24 or newer with `NODE_USE_ENV_PROXY=1`, or point `GEMINI_BASE_URL` at a relay.
 
 ### Agent tools and context
 

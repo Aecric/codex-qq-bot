@@ -65,3 +65,15 @@ test("dashboard offers every interest provider in each provider select", () => {
     assert.deepEqual(values, ["openrouter", "deepseek", "custom", "codex", "ollama"], id);
   }
 });
+
+test("dashboard knows every agent engine and checks API keys", async () => {
+  const { AGENT_ENGINE_IDS } = await import("../src/infrastructure/agent/agent-engines.js");
+  const css = readFileSync(new URL("client.css", resources), "utf8");
+  for (const id of AGENT_ENGINE_IDS) {
+    assert.match(javascript.match(/const engineNames = \{[^}]*\}/)[0], new RegExp(`\\b${id}:`), `engine name for ${id}`);
+    assert.match(html, new RegExp(`<option value="${id}">`), `log filter option for ${id}`);
+    assert.match(css, new RegExp(`\\.engine-tag\\.${id}\\b`), `log tag style for ${id}`);
+    assert.match(css, new RegExp(`\\[data-engine="${id}"\\] \\.engine-glyph::before`), `glyph for ${id}`);
+  }
+  assert.match(javascript, /engine\.apiKeyConfigured === false \|\| engine\.lastOk === false/);
+});

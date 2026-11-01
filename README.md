@@ -86,6 +86,8 @@ npm run ncc -- engine claude   # or codex
 npm run ncc -- start           # an interactive start also asks; press Enter to keep the last choice
 ```
 
+You can also skip the CLI and drive the bot over an API: choose the engine, enter the API key and restart the Hub on the dashboard's Settings page, or set `DEEPSEEK_API_KEY` or `GEMINI_API_KEY` in `config/local.env`, run `npm run ncc -- engine deepseek` (or `gemini`) and restart the Hub. API engines have no shell; see the [configuration guide](docs/CONFIGURATION.md) for the differences.
+
 With Claude Code every reply starts its own `claude -p` process, so replies take a few seconds longer than with Codex, and can take over ten seconds on a slow PRoot host. Permissions are handled like this:
 
 - every turn runs in `--restricted` mode, so file tools only reach the turn's task directory;
@@ -126,7 +128,7 @@ Call the repository controller through npm so it cannot clash with another `ncc`
 npm run ncc -- status          # status
 npm run ncc -- setup           # settings menu
 npm run ncc -- start           # start the Hub
-npm run ncc -- engine          # show the AI engine; add codex / claude to switch
+npm run ncc -- engine          # show the AI engine; add codex / claude / deepseek / gemini to switch
 npm run ncc -- claude-login    # Claude Code sign-in and test
 npm run ncc -- session-mode persistent GROUP_ID
 npm run ncc -- ai-run style-review GROUP_ID --force

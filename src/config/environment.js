@@ -99,7 +99,7 @@ export function createEnvironmentConfig(env = process.env) {
 
     agentEngine: enumValue(
       String(env.CODEX_REMOTE_CONTACT_AGENT_ENGINE || "").trim().toLowerCase(),
-      ["codex", "claude"],
+      ["codex", "claude", "deepseek", "gemini"],
       "codex"
     ),
     // Codex serves QQ tools from a per-turn MCP server by default; "dynamic"
@@ -125,6 +125,11 @@ export function createEnvironmentConfig(env = process.env) {
       ["low", "medium", "high", "xhigh", "max"],
       null
     ),
+    // Main-model settings for the API engines; the API keys and the DeepSeek
+    // base URL are shared with the interest judge below.
+    deepseekModel: String(env.CODEX_REMOTE_CONTACT_DEEPSEEK_MODEL || "").trim() || "deepseek-v4-pro",
+    geminiAgentModel: String(env.CODEX_REMOTE_CONTACT_GEMINI_AGENT_MODEL || "").trim() || "gemini-3.8-flash",
+    geminiBaseUrl: env.GEMINI_BASE_URL || env.CODEX_REMOTE_CONTACT_GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta/openai",
     codexCliPath: env.CODEX_CLI_PATH || "/Applications/Codex.app/Contents/Resources/codex",
     codexModel: env.CODEX_REMOTE_CONTACT_CODEX_MODEL || "gpt-5.4-mini",
     codexReasoningEffort: env.CODEX_REMOTE_CONTACT_REASONING_EFFORT || "low",

@@ -72,7 +72,7 @@ const categoryColors = {
   command: "brightYellow",
   lifecycle: "brightWhite"
 };
-const engineColors = { codex: "brightGreen", claude: "brightYellow" };
+const engineColors = { codex: "brightGreen", claude: "brightYellow", deepseek: "brightBlue", gemini: "brightCyan" };
 const traceColors = ["brightBlue", "brightCyan", "brightMagenta", "brightYellow", "green", "magenta"];
 
 const levelSymbols = { debug: "·", info: "•", success: "✓", warn: "!", error: "✗" };

@@ -195,13 +195,28 @@ Hub 会先识别 Codex 任务类型，再把上表的任务基础时限按当前
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `CODEX_REMOTE_CONTACT_AGENT_ENGINE` | `codex` | 驱动 Bot 的引擎：`codex` 或 `claude`。仓库 `ncc engine` 和交互式 `ncc start` 会把它写进 `config/local.env` |
+| `CODEX_REMOTE_CONTACT_AGENT_ENGINE` | `codex` | 驱动 Bot 的引擎：`codex`、`claude`、`deepseek` 或 `gemini`。仓库 `ncc engine` 和交互式 `ncc start` 会把它写进 `config/local.env` |
+| `DEEPSEEK_API_KEY` | 空 | `deepseek` 引擎的 API Key，也供兴趣判断使用 |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | DeepSeek 接口地址，也供兴趣判断使用 |
+| `CODEX_REMOTE_CONTACT_DEEPSEEK_MODEL` | `deepseek-v4-pro` | `deepseek` 引擎的主模型 |
+| `GEMINI_API_KEY` | 空 | `gemini` 引擎的 API Key，也供 Gemini 求助工具使用 |
+| `GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Gemini 的 OpenAI 兼容接口地址，可换成你的中转地址 |
+| `CODEX_REMOTE_CONTACT_GEMINI_AGENT_MODEL` | `gemini-3.8-flash` | `gemini` 引擎的主模型；`CODEX_REMOTE_CONTACT_GEMINI_MODEL` 仍只管 Gemini 求助工具 |
 | `CLAUDE_CLI_PATH` | `claude` | Claude Code 可执行文件，默认从 `PATH` 查找 |
 | `CODEX_REMOTE_CONTACT_CLAUDE_MODEL` | `opus` | Claude Code 使用的模型，可以是别名（`opus`、`sonnet`、`haiku`）或完整模型名 |
 | `CODEX_REMOTE_CONTACT_CLAUDE_EFFORT` | 空 | Claude Code 思考强度：`low`、`medium`、`high`、`xhigh` 或 `max`。留空时沿用 Bot 的 `ai.reasoningEffort`（`minimal` 按 `low`，`ultra` 按 `max`） |
 | `CLAUDE_ENV_FILE` | `~/.claude/ncc-profiles/active.env` | 可选的 Claude 连接 profile。文件存在时，其中的 `ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_API_KEY`、`ANTHROPIC_MODEL` 等连接变量会替换继承值，每轮重新读取；不存在时使用本机 `claude` 的官方登录 |
 
 用 Claude Code 时，`ai.model`、推理摘要、Codex 人格和服务档位不生效，额度信息也只对 Codex 有效。任务时限表同样适用，但每轮都会新起一个 `claude -p` 进程，冷启动时间计入时限。Claude 子进程只继承运行必需的变量和 `CODEX_REMOTE_CONTACT_*` 标记（名称里带 KEY、TOKEN、SECRET、PASSWORD、COOKIE 的除外），Hub 的其他密钥不会传进去。
+
+用 `deepseek` 或 `gemini` 时不需要本机 CLI，Hub 直接调用它们的 OpenAI 兼容接口并自己执行工具循环。和 CLI 引擎的差别：
+
+- 没有 shell。文件只能通过内置的列目录、读文件、写文件工具访问，而且限于本轮工作目录；只读任务不提供这些工具。
+- 没有服务端会话，每轮都发送完整上下文，持久会话设置不生效，token 用量会更高。
+- 仪表盘的设置页可以切换引擎，填写模型、API Key 和接口地址，并重启 Hub。这些内容写入 `config/local.env`（权限 600），只能在运行 Hub 的这台电脑上修改；已保存的 Key 不会显示。接口地址必须是 HTTPS，或者本机的 HTTP 地址。
+- 联网走 Hub 自己的搜索；DeepSeek 目前按不支持看图处理，图片只以文字占位。
+- `ai.reasoningEffort` 会换算成各家支持的档位：DeepSeek 的 `none`、`minimal` 关闭思考，`low` 到 `high` 按 `high`，更高按 `max`；Gemini 的 `medium` 保持不变，其余归到 `low` 或 `high`，模型拒绝时自动去掉该参数重试。
+- Node 的 `fetch` 默认不读 `HTTPS_PROXY`。需要代理才能访问时，用 Node 24 及以上并设置 `NODE_USE_ENV_PROXY=1`，或者把 `GEMINI_BASE_URL` 指向中转地址。
 
 ### Agent 工具与上下文
 

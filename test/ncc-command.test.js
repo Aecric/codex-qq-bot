@@ -41,8 +41,12 @@ test("repository ncc saves the chosen agent engine in config/local.env", async (
     assert.match(run("engine", "claude"), /Claude Code/);
     assert.equal(run("engine").trim(), "claude");
     assert.match(await readFile(join(home, "config", "local.env"), "utf8"), /^export CODEX_REMOTE_CONTACT_AGENT_ENGINE=claude$/m);
-    assert.throws(() => run("engine", "gemini"));
+    assert.throws(() => run("engine", "llama"));
     assert.equal(run("engine").trim(), "claude");
+    assert.match(run("engine", "deepseek"), /DeepSeek/);
+    assert.equal(run("engine").trim(), "deepseek");
+    assert.match(run("engine", "gemini"), /Gemini/);
+    assert.equal(run("engine").trim(), "gemini");
   } finally {
     await rm(home, { recursive: true, force: true });
   }

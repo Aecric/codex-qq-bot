@@ -323,7 +323,7 @@ current_engine() {
   local engine
   engine="$(env_file_value "$LOCAL_ENV_FILE" CODEX_REMOTE_CONTACT_AGENT_ENGINE)"
   case "$engine" in
-    claude) printf 'claude' ;;
+    claude|deepseek|gemini) printf '%s' "$engine" ;;
     *) printf 'codex' ;;
   esac
 }
@@ -331,6 +331,8 @@ current_engine() {
 engine_label() {
   case "$1" in
     claude) printf 'Claude Code' ;;
+    deepseek) printf 'DeepSeek' ;;
+    gemini) printf 'Gemini' ;;
     *) printf 'Codex' ;;
   esac
 }
@@ -338,12 +340,23 @@ engine_label() {
 set_engine() {
   local engine="${1:-}"
   case "$engine" in
-    codex|claude) ;;
-    *) die "引擎只能是 codex 或 claude。" ;;
+    codex|claude|deepseek|gemini) ;;
+    *) die "引擎只能是 codex、claude、deepseek 或 gemini。" ;;
   esac
-  if ! command -v "$engine" >/dev/null 2>&1; then
-    log "警告：PATH 里找不到 $engine 命令，Hub 启动后回复会失败。"
-  fi
+  case "$engine" in
+    deepseek|gemini)
+      local key_name
+      key_name="$(printf '%s' "$engine" | tr '[:lower:]' '[:upper:]')_API_KEY"
+      if [ -z "$(env_file_value "$LOCAL_ENV_FILE" "$key_name")" ] && [ -z "$(env_file_value "$LOCAL_ENV_FILE" "CODEX_REMOTE_CONTACT_$key_name")" ]; then
+        log "警告：config/local.env 里没有 $key_name，Hub 启动后回复会失败。"
+      fi
+      ;;
+    *)
+      if ! command -v "$engine" >/dev/null 2>&1; then
+        log "警告：PATH 里找不到 $engine 命令，Hub 启动后回复会失败。"
+      fi
+      ;;
+  esac
   set_env_value "CODEX_REMOTE_CONTACT_AGENT_ENGINE" "$engine"
   log "AI 引擎已设为 $(engine_label "$engine")。已运行的 Hub 需要重启才会切换。"
 }
@@ -355,12 +368,14 @@ choose_engine() {
   saved="$(current_engine)"
   [ -t 0 ] || return 0
   printf '\n选择这次使用的 AI 引擎（当前：%s）\n' "$(engine_label "$saved")"
-  printf '  1) Codex\n  2) Claude Code\n'
+  printf '  1) Codex\n  2) Claude Code\n  3) DeepSeek（API）\n  4) Gemini（API）\n'
   printf '请选择 [回车沿用 %s]：' "$(engine_label "$saved")"
   read -r choice || true
   case "${choice:-}" in
     1|codex) set_engine codex ;;
     2|claude) set_engine claude ;;
+    3|deepseek) set_engine deepseek ;;
+    4|gemini) set_engine gemini ;;
     "") log "沿用 $(engine_label "$saved")。" ;;
     *) log "未知选项，沿用 $(engine_label "$saved")。" ;;
   esac
@@ -368,13 +383,15 @@ choose_engine() {
 
 engine_menu() {
   printf '\n当前 AI 引擎：%s\n' "$(engine_label "$(current_engine)")"
-  printf '  1) Codex\n  2) Claude Code\n  0) 返回\n'
+  printf '  1) Codex\n  2) Claude Code\n  3) DeepSeek（API）\n  4) Gemini（API）\n  0) 返回\n'
   printf '请选择：'
   local choice
   read -r choice || true
   case "${choice:-}" in
     1) set_engine codex ;;
     2) set_engine claude ;;
+    3) set_engine deepseek ;;
+    4) set_engine gemini ;;
     *) ;;
   esac
   pause

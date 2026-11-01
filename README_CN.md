@@ -86,6 +86,8 @@ npm run ncc -- engine claude   # 或 codex
 npm run ncc -- start           # 在终端里启动时也会问一次，直接回车沿用上次的选择
 ```
 
+也可以不装 CLI，直接用 API 驱动：在仪表盘的设置页选择引擎、填写 API Key 并重启 Hub；也可以在 `config/local.env` 里设置 `DEEPSEEK_API_KEY` 或 `GEMINI_API_KEY`，再运行 `npm run ncc -- engine deepseek`（或 `gemini`）并重启 Hub。API 引擎没有 shell，差别见[配置说明](docs/CONFIGURATION_CN.md)。
+
 用 Claude Code 时，每一轮回复都会单独起一个 `claude -p` 进程，因此比 Codex 多几秒启动时间，在性能较弱的 PRoot 环境里可能要十几秒。权限方面的处理是：
 
 - 所有轮次都用 `--restricted` 模式运行，读写文件只能在本轮的任务目录里；
@@ -126,7 +128,7 @@ npm run ncc -- start           # 在终端里启动时也会问一次，直接�
 npm run ncc -- status          # 看状态
 npm run ncc -- setup           # 配置菜单
 npm run ncc -- start           # 启动 Hub
-npm run ncc -- engine          # 查看当前 AI 引擎；后面跟 codex / claude 可切换
+npm run ncc -- engine          # 查看当前 AI 引擎；后面跟 codex / claude / deepseek / gemini 可切换
 npm run ncc -- claude-login    # Claude Code 登录和测试
 npm run ncc -- session-mode persistent 群号
 npm run ncc -- ai-run style-review 群号 --force
