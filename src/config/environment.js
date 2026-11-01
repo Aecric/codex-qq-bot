@@ -148,6 +148,56 @@ export function createEnvironmentConfig(env = process.env) {
     qqMemoryLimit: numberOrDefault(env.CODEX_REMOTE_CONTACT_QQ_MEMORY_LIMIT, 10),
     qqGroupMemoryLimit: numberOrDefault(env.CODEX_REMOTE_CONTACT_QQ_GROUP_MEMORY_LIMIT, 200),
     qqProactiveReplyEnabled: env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE !== "0",
+    // Groups where un-mentioned proactive replies may start; empty means every
+    // allowlisted group. Mentions, replies and follow-ups are unaffected.
+    // Human messages watched after the Bot answers an @ (0 turns it off).
+    qqEngagedWindowMessages: boundedInteger(env.CODEX_REMOTE_CONTACT_QQ_ENGAGED_WINDOW_MESSAGES, {
+      defaultValue: 30,
+      min: 0,
+      max: 200
+    }),
+    // Asks the same person must make before a task turn is carried out
+    // (persona rule; 0 or 1 turns it off).
+    qqTaskPleadingAsks: boundedInteger(env.CODEX_REMOTE_CONTACT_QQ_TASK_PLEADING_ASKS, {
+      defaultValue: 0,
+      min: 0,
+      max: 10
+    }),
+    // Retire a long-lived QQ Codex thread after this many hours or replies,
+    // saving a chat summary first; 0 turns either limit off.
+    qqSessionRotateHours: boundedNumber(env.CODEX_REMOTE_CONTACT_QQ_SESSION_ROTATE_HOURS, {
+      defaultValue: 0,
+      min: 0,
+      max: 168
+    }),
+    qqSessionRotateReplies: boundedInteger(env.CODEX_REMOTE_CONTACT_QQ_SESSION_ROTATE_REPLIES, {
+      defaultValue: 0,
+      min: 0,
+      max: 1000
+    }),
+    // Saver mode: below this share of the Codex 5-hour window (percent) the
+    // interest module stops and replies use a small model at low effort until
+    // the window is back to qqQuotaSaverResumeAt or resets; 0 turns it off.
+    qqQuotaSaverBelow: boundedNumber(env.CODEX_REMOTE_CONTACT_QQ_QUOTA_SAVER_BELOW, {
+      defaultValue: 0,
+      min: 0,
+      max: 90
+    }),
+    qqQuotaSaverResumeAt: boundedNumber(env.CODEX_REMOTE_CONTACT_QQ_QUOTA_SAVER_RESUME_AT, {
+      defaultValue: 50,
+      min: 1,
+      max: 100
+    }),
+    qqQuotaSaverModel: String(env.CODEX_REMOTE_CONTACT_QQ_QUOTA_SAVER_MODEL || "").trim() || "gpt-6-luna",
+    qqStickerMinChance: boundedNumber(env.CODEX_REMOTE_CONTACT_QQ_STICKER_MIN_CHANCE, {
+      defaultValue: 0,
+      min: 0,
+      max: 1
+    }),
+    qqProactiveGroupIds: String(env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_GROUPS || "")
+      .split(/[\s,，]+/)
+      .map((id) => id.trim())
+      .filter((id) => /^[1-9]\d{4,12}$/.test(id)),
     qqProactiveJudgeEveryMessages: boundedInteger(env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_EVERY_MESSAGES, {
       defaultValue: 20,
       min: 1,
@@ -175,6 +225,20 @@ export function createEnvironmentConfig(env = process.env) {
     qqProactiveJudgeModel: env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_MODEL || defaultQqProactiveJudgeModel,
     qqProactiveJudgeTimeoutMs: numberOrDefault(env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_TIMEOUT_MS, 6_500),
     qqProactiveJudgeVision: normalizeQqInterestVisionMode(env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_VISION),
+    // While the owner uses the computer the judge runs on the active provider;
+    // after this many idle seconds it moves to the idle (local) provider.
+    qqJudgeIdleSwitchEnabled: env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_IDLE_SWITCH === "1",
+    qqJudgeIdleSwitchAfterSeconds: boundedInteger(env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_IDLE_AFTER_SECONDS, {
+      defaultValue: 300,
+      min: 60,
+      max: 86_400
+    }),
+    qqJudgeIdleSwitchActiveProvider: normalizeInterestModelProvider(
+      env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_ACTIVE_PROVIDER || "codex"
+    ),
+    qqJudgeIdleSwitchIdleProvider: normalizeInterestModelProvider(
+      env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_IDLE_PROVIDER || "ollama"
+    ),
     qqProactiveJudgeMinInterest: 20,
     qqSelfPersonaScopeInitialMessages: boundedInteger(env.CODEX_REMOTE_CONTACT_QQ_SELF_PERSONA_SCOPE_INITIAL_MESSAGES, {
       defaultValue: 64,
@@ -226,6 +290,8 @@ export function createEnvironmentConfig(env = process.env) {
       min: 0.25,
       max: 24
     }),
+    qqReplyScrubEnabled: env.CODEX_REMOTE_CONTACT_QQ_REPLY_SCRUB !== "0",
+    qqSelfPersonaGenerationEnabled: env.CODEX_REMOTE_CONTACT_QQ_SELF_PERSONA_GENERATION !== "0",
     qqWebLookupEnabled: env.CODEX_REMOTE_CONTACT_QQ_WEB_LOOKUP !== "0",
     qqWebLookupTimeoutMs,
     qqWebLookupAttemptTimeoutMs: numberOrDefault(
@@ -267,6 +333,9 @@ export function createEnvironmentConfig(env = process.env) {
     deepSeekBaseUrl: env.DEEPSEEK_BASE_URL || env.CODEX_REMOTE_CONTACT_DEEPSEEK_BASE_URL || getDefaultInterestModelBaseUrl("deepseek"),
     customInterestModelApiKey: env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_API_KEY || "",
     customInterestModelBaseUrl: env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_BASE_URL || "",
+    ollamaBaseUrl: env.OLLAMA_BASE_URL || env.CODEX_REMOTE_CONTACT_OLLAMA_BASE_URL || getDefaultInterestModelBaseUrl("ollama"),
+    geminiApiKey: env.GEMINI_API_KEY || env.CODEX_REMOTE_CONTACT_GEMINI_API_KEY || "",
+    geminiModel: String(env.CODEX_REMOTE_CONTACT_GEMINI_MODEL || "").trim() || "gemini-3.8-flash",
     tavilyApiKey: env.TAVILY_API_KEY || env.CODEX_REMOTE_CONTACT_TAVILY_API_KEY || "",
 
     sqliteTimeoutMs,

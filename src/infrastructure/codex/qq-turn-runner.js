@@ -91,7 +91,10 @@ export function createQqCodexTurnRunner({
       const previousQuota = state.maintenance.codex.quota;
       let generationId = null;
       const generationIds = new WeakMap();
-      const engineSettings = { ai: state.ai, claudeModel, claudeReasoningEffort };
+      // A background task may pin its own model and effort (the local interest
+      // judge runs on a small model) without touching the reply settings.
+      const ai = options.aiOverride ? { ...state.ai, ...options.aiOverride } : state.ai;
+      const engineSettings = { ai, claudeModel, claudeReasoningEffort };
       const model = agent.selectModel(engineSettings);
       const reasoningEffort = agent.selectReasoningEffort(engineSettings);
       try {
@@ -103,9 +106,9 @@ export function createQqCodexTurnRunner({
           env: agent.buildEnv({ overrides: options.env }),
           model,
           reasoningEffort,
-          reasoningSummary: options.reasoningSummary || state.ai.reasoningSummary || "auto",
-          personality: options.personality || state.ai.personality || null,
-          serviceTier: options.serviceTier || state.ai.serviceTier || null,
+          reasoningSummary: options.reasoningSummary || ai.reasoningSummary || "auto",
+          personality: options.personality || ai.personality || null,
+          serviceTier: options.serviceTier || ai.serviceTier || null,
           prompt: Object.hasOwn(attempt, "prompt") ? attempt.prompt : input,
           resumePrompt: Object.hasOwn(attempt, "resumePrompt") ? attempt.resumePrompt : options.resumePrompt,
           imagePaths: Object.hasOwn(attempt, "imagePaths") ? attempt.imagePaths : options.imagePaths || [],

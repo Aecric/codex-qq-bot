@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   createEmptyQqCodexSessionStore,
   fingerprintQqCodexDynamicTools,
+  getQqCodexSessionRotationReason,
   normalizeQqCodexSessionMode,
   normalizeQqCodexSessionSettings,
   normalizeQqCodexSessionStore,
@@ -127,4 +128,20 @@ test("MCP-served tool catalogs keep a persistent thread reusable across catalog 
   // A thread created with dynamic tools still carries them, so it is replaced once.
   assert.equal(resolveQqCodexReusableThreadId(plan(fingerprintQqCodexDynamicTools(toolsA)), toolsA, { transport: "mcp" }), null);
   assert.equal(resolveQqCodexReusableThreadId(plan(fingerprintQqCodexDynamicTools(toolsA)), toolsB), null);
+});
+
+test("a thread counts its replies and is due for rotation by age or reply count", () => {
+  let store = createEmptyQqCodexSessionStore();
+  store = upsertQqCodexSessionThread(store, { scopeId: "g", threadId: "t1", now: "2026-10-29T00:00:00.000Z" });
+  store = upsertQqCodexSessionThread(store, { scopeId: "g", threadId: "t1", now: "2026-10-29T01:00:00.000Z" });
+  assert.equal(store.threads.g.replyCount, 2);
+  store = upsertQqCodexSessionThread(store, { scopeId: "g", threadId: "t2", now: "2026-10-29T02:00:00.000Z" });
+  assert.equal(store.threads.g.replyCount, 1);
+
+  const thread = { threadId: "t1", createdAt: "2026-10-29T00:00:00.000Z", replyCount: 10 };
+  const at = (iso) => Date.parse(iso);
+  assert.equal(getQqCodexSessionRotationReason(thread, { maxAgeHours: 6, maxReplies: 60, now: at("2026-10-29T05:59:00.000Z") }), "");
+  assert.equal(getQqCodexSessionRotationReason(thread, { maxAgeHours: 6, now: at("2026-10-29T06:00:00.000Z") }), "age");
+  assert.equal(getQqCodexSessionRotationReason({ ...thread, replyCount: 60 }, { maxReplies: 60, now: at("2026-10-29T01:00:00.000Z") }), "replies");
+  assert.equal(getQqCodexSessionRotationReason({ ...thread, replyCount: 999 }, { now: at("2030-01-01T00:00:00.000Z") }), "");
 });

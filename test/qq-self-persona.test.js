@@ -13,6 +13,7 @@ import {
   parseQqSelfPersonaJson,
   qqSelfPersonaScopeOutputSchema,
   recordQqSelfPersonaActivity,
+  resolveQqSelfPersonaName,
   shouldRegenerateQqSelfPersona,
   updateQqSelfPersonaAccount
 } from "../src/qq-self-persona.js";
@@ -300,4 +301,24 @@ test("parses the final persona JSON instead of earlier analysis", () => {
   ].join("\n"));
   assert.equal(parsed.name, "小星");
   assert.deepEqual(parsed.interestKeywords, ["小星", "AI"]);
+});
+
+test("a configured branding name is the fixed character name over the QQ nickname", () => {
+  const store = updateQqSelfPersonaAccount(createEmptyQqSelfPersona(), { userId: "10001", nickname: "hallie" }).store;
+  assert.equal(resolveQqSelfPersonaName(store, "Astra"), "Astra");
+  assert.equal(resolveQqSelfPersonaName(store, "assistant"), "hallie");
+  assert.equal(resolveQqSelfPersonaName(createEmptyQqSelfPersona(), ""), "Bot");
+  const generated = applyGeneratedQqSelfPersona(store, {
+    name: "hallie",
+    selfDescription: "喜欢安静的午后",
+    traits: ["克制"],
+    interestKeywords: ["茶"],
+    interestParagraph: "",
+    interests: [],
+    dislikes: [],
+    proactiveTopics: [],
+    conversationStyle: []
+  });
+  assert.match(formatQqSelfPersonaContext(generated, { name: "Astra" }), /名称：Astra/);
+  assert.match(formatQqSelfPersonaContext(generated, { interestOnly: true, name: "Astra" }), /人格名称：Astra/);
 });

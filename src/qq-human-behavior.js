@@ -129,7 +129,7 @@ export function analyzeQqBotChatStyle(entries = [], { windowSize = 160 } = {}) {
   };
 }
 
-export function buildQqHumanBehaviorPlan(event = {}, intent = {}, style = {}, { text = "" } = {}) {
+export function buildQqHumanBehaviorPlan(event = {}, intent = {}, style = {}, { text = "", stickerMinChance = 0 } = {}) {
   const source = String(text || event?.text || "").replace(/\s+/g, " ").trim();
   const privateChat = Boolean(style.privateChat || event.type === "private_message" || !event.groupId);
   const hasImages = Boolean(intent.hasImages);
@@ -234,7 +234,7 @@ export function buildQqHumanBehaviorPlan(event = {}, intent = {}, style = {}, { 
   const emojiChance = getEmojiChance(mode, source, style);
   const preferEmoji = emojiChance > 0
     && stableFraction(`emoji:${event.groupId || "private"}:${event.senderId || ""}:${event.raw?.message_id || ""}:${source}`) < emojiChance;
-  const stickerChance = getStickerChance(mode, source, style, { privateChat, hasImages });
+  const stickerChance = getStickerChance(mode, source, style, { privateChat, hasImages, minChance: stickerMinChance });
   const preferSticker = stickerChance > 0
     && stableFraction(`sticker:${event.groupId || "private"}:${event.senderId || ""}:${event.raw?.message_id || ""}:${source}`) < stickerChance;
   return {
@@ -268,7 +268,7 @@ export function formatQqHumanBehaviorContext(style = {}, plan = {}, {
     : "本轮不必为了像人而强塞文字 emoji。";
   const stickerInstruction = plan.preferSticker
     ? "本轮适合像真人那样在文字后补 1 张表情包（或者只发表情包）：优先从下面手边的几张里挑情绪最贴的，把 #编号 填进 sticker 字段，它会在文字后单独发出；只发表情包时 text 和 bubbles 留空。手边的都不贴才用 qq_sticker 按情绪/场合/梗搜，或者这轮不发。想发就发，不用在文字里解释。"
-    : "本轮默认不发表情包；只有语境非常贴合时才例外用 sticker 字段发 1 张。";
+    : "本轮不刻意配表情包；情绪正好对上时（尤其是部署 profile 为这种情绪指定了专属表情包），照样可以用 sticker 字段发 1 张。";
   return [
     `真人化动态规划（匿名统计样本 ${style.sampleSize || 0} 条；不模仿具体个人）：`,
     `- 模式：${plan.mode || "casual"}；目标：${plan.goal || "自然承接"}。`,
@@ -364,13 +364,16 @@ function getEmojiChance(mode, source, style) {
   return clamp(learned * 1.6, 0.04, 0.18);
 }
 
-function getStickerChance(mode, source, style, { privateChat = false, hasImages = false } = {}) {
+// minChance is a deployment floor for bots whose persona leans on stickers;
+// it only applies to chatty modes and may lift the chance above the usual cap.
+function getStickerChance(mode, source, style, { privateChat = false, hasImages = false, minChance = 0 } = {}) {
   if (!["ping", "casual", "social_emotion", "social_request", "opinion", "visual_reaction", "casual_answer", "shared_content"].includes(mode)) return 0;
   let chance = getQqAdaptiveStickerChance(style, { privateChat });
   if (hasImages || isQqStickerStyleMessage({ text: source })) chance += 0.06;
   if (mode === "visual_reaction") chance += 0.04;
   if (mode === "ping") chance *= 0.65;
-  return clamp(chance, 0, privateChat ? 0.30 : 0.40);
+  const floor = clamp(Number(minChance) || 0, 0, 1);
+  return clamp(Math.max(chance, floor), 0, Math.max(privateChat ? 0.30 : 0.40, floor));
 }
 
 export function getQqHumanVisibleText(entry) {

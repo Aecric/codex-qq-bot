@@ -202,8 +202,12 @@ export async function shouldProactivelyReplyToQq(event = {}, state = {}, helpers
         interest: assessment
       };
     } else {
+      // The caller's provider snapshot wins over live state: the provider can
+      // change while this event waits, and helpers.fetch belongs to the
+      // provider the caller saw.
       const judgeConfig = normalizeJudgeConfig({
         ...(state.proactive?.judge || {}),
+        ...pickJudgeModelSnapshot(helpers.interestModel),
         judgeEveryMessages,
         judgeEveryMinutes,
         triggerMode
@@ -241,7 +245,11 @@ export async function shouldProactivelyReplyToQq(event = {}, state = {}, helpers
           images: judgeImages,
           vision
         });
-        const interestMultiplier = Math.max(0.08, Math.min(1, Number(helpers.relationshipInterest?.interestMultiplier ?? 1)));
+        // Inside an engaged window the judge already weighed the live
+        // conversation, so relationship damping must not veto its approval.
+        const interestMultiplier = helpers.interestSignals?.engagedConversation
+          ? 1
+          : Math.max(0.08, Math.min(1, Number(helpers.relationshipInterest?.interestMultiplier ?? 1)));
         const effectiveInterest = judge.ok ? Math.round(judge.interest * interestMultiplier * 1000) / 1000 : 0;
         judge.effectiveInterest = effectiveInterest;
         judge.interestMultiplier = interestMultiplier;
@@ -480,7 +488,7 @@ function applyPenalties(result, text, event, recent) {
 
 async function judgeProactiveInterestWithProvider(event, assessment, config) {
   const provider = normalizeInterestModelProvider(config.provider);
-  const providerLabel = provider === "custom" ? "Custom interest provider" : provider === "deepseek" ? "DeepSeek" : "OpenRouter";
+  const providerLabel = provider === "codex" ? "Local Codex" : provider === "ollama" ? "Local Ollama" : provider === "custom" ? "Custom interest provider" : provider === "deepseek" ? "DeepSeek" : "OpenRouter";
   if (!config.apiKey) {
     return { ok: false, fallback: true, provider, reason: `${providerLabel} API key is not configured` };
   }
@@ -629,7 +637,7 @@ async function judgeProactiveInterestWithProvider(event, assessment, config) {
 
 export async function runQqInterestModelStructuredTask(options = {}) {
   const provider = normalizeInterestModelProvider(options.provider);
-  const providerLabel = provider === "custom" ? "Custom interest provider" : provider === "deepseek" ? "DeepSeek" : "OpenRouter";
+  const providerLabel = provider === "codex" ? "Local Codex" : provider === "ollama" ? "Local Ollama" : provider === "custom" ? "Custom interest provider" : provider === "deepseek" ? "DeepSeek" : "OpenRouter";
   const apiKey = String(options.apiKey || "").trim();
   if (!apiKey) {
     return { ok: false, provider, reason: `${providerLabel} API key is not configured`, fallback: false };
@@ -1043,6 +1051,9 @@ function buildJudgeMessages(event, assessment, config, { formatRetry = false, im
       content: [
         "【角色】你是 QQ Bot 的后台兴趣闸门。你只决定一段未 @ Bot 的群聊是否值得唤醒主模型；你不聊天、不写回复，也不指导主模型的措辞。",
         "【判断流程】",
+        config.interestSignals?.engagedConversation
+          ? "【观察窗口，优先于下面第 3 步的时机修正】Bot 刚在本群被 @ 并参与了对话，Hub 正逐条送来之后的群消息（combinedInterestSignals.engagedConversation 是剩余条数）。只要这条是在直接对 Bot 说话或提问（换了新话题也算）、调侃或评价 Bot、回应 Bot 刚说的话、或接着 Bot 参与的话题，就必须批准，interest 至少 60；不要因为“话题已转走”“没有新接话点”“Bot 最近说得多”而拒绝这类消息。只有明显在和别人说话、与 Bot 无关的刷屏才拒绝。"
+          : null,
         "1. 结合当前消息、引用和最近上下文，还原真实语义与对象；不要按单个关键词猜。",
         "2. 站在 Bot 已形成的兴趣与关系位置上，判断它是否产生了一个具体、非复述、值得说出来的反应。",
         config.conversationFollowUp?.candidate
@@ -1227,6 +1238,11 @@ function parseJudgeJson(content) {
   } catch {
     return {};
   }
+}
+
+function pickJudgeModelSnapshot(value) {
+  if (!value?.provider) return {};
+  return { provider: value.provider, model: value.model, baseUrl: value.baseUrl };
 }
 
 function normalizeJudgeConfig(value = {}) {

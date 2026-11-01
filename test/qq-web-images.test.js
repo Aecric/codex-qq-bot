@@ -58,7 +58,16 @@ test("the judge gets at most two labelled pictures from the judged window", () =
   ]);
   assert.deepEqual(selectQqInterestJudgeImages({ raw: { message_id: 3 } }, recent).map((item) => item.image.file), ["old.png"]);
   assert.equal(buildQqInterestImageContent("text", [{ dataUrl: "data:text/html;base64,AA" }]), "text");
-  assert.equal(buildQqInterestImageContent("text", [{ dataUrl: "data:image/png;base64,AA" }]).length, 2);
+  assert.deepEqual(buildQqInterestImageContent("text", [
+    { dataUrl: "data:image/png;base64,AA", origin: "当前消息" },
+    { dataUrl: "data:image/png;base64,BB", origin: "最近上下文", sender: "小红" }
+  ]), [
+    { type: "text", text: "text" },
+    { type: "text", text: "【attachedImages 第 1 张】来源：当前消息。" },
+    { type: "image_url", image_url: { url: "data:image/png;base64,AA" } },
+    { type: "text", text: "【attachedImages 第 2 张】来源：最近上下文，发送者：小红。这不是当前消息；当前消息的内容以 currentMessage 为准。" },
+    { type: "image_url", image_url: { url: "data:image/png;base64,BB" } }
+  ]);
 });
 
 test("Tavily image search requests descriptions and keeps only web URLs", async () => {

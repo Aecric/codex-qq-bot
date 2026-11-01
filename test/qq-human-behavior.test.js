@@ -268,3 +268,15 @@ test("compresses learned human follow-up gaps into a bounded bubble delay", () =
   assert.equal(getQqAdaptiveBubbleDelayMs({ sameSpeakerGapMedianSeconds: 30 }, { configuredMs: 650 }), 1800);
   assert.equal(getQqAdaptiveBubbleDelayMs({}, { configuredMs: 700 }), 700);
 });
+
+test("a deployment sticker floor raises chatty turns but never task turns", () => {
+  const style = analyzeQqHumanChatStyle([
+    { senderId: "1", text: "好" },
+    { senderId: "2", text: "有点困" }
+  ]);
+  const chat = (options) => buildQqHumanBehaviorPlan({ groupId: "g", senderId: "u", text: "这是啥" }, { isQuestion: true }, style, { text: "这是啥", ...options });
+  assert.ok(chat({}).stickerChance <= 0.4);
+  assert.equal(chat({ stickerMinChance: 0.6 }).stickerChance, 0.6);
+  const task = buildQqHumanBehaviorPlan({ groupId: "g", senderId: "u", text: "帮我查一下" }, { asksAction: true }, style, { text: "帮我查一下", stickerMinChance: 0.6 });
+  assert.equal(task.stickerChance, 0);
+});

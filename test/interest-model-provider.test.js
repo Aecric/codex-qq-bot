@@ -68,3 +68,35 @@ test("builds DeepSeek and custom JSON-object requests without OpenRouter-only fi
     assert.equal("http-referer" in request.headers, false);
   }
 });
+
+test("routes the ollama provider to the local daemon without a key and with thinking off", () => {
+  assert.equal(getDefaultInterestModel("ollama"), "gemma4:e4b-it-qat");
+  const runtime = resolveInterestModelRuntimeConfig("ollama", { ollamaBaseUrl: "http://127.0.0.1:11434/v1/" });
+  assert.equal(runtime.baseUrl, "http://127.0.0.1:11434/v1");
+  assert.equal(runtime.apiKeyConfigured, true);
+  assert.equal(resolveInterestModelRuntimeConfig("ollama").baseUrl, "http://127.0.0.1:11434/v1");
+
+  const request = buildInterestModelChatCompletion({
+    provider: "ollama",
+    apiKey: runtime.apiKey,
+    model: "gemma4:e4b",
+    temperature: 0.2,
+    maxTokens: 500,
+    messages: [],
+    responseSchema: schema,
+    taskName: "test_task"
+  });
+  assert.deepEqual(request.body.response_format, { type: "json_object" });
+  assert.equal(request.body.reasoning_effort, "none");
+  assert.equal(request.body.keep_alive, -1);
+  assert.equal("reasoning" in request.body, false);
+
+  const withImage = buildInterestModelChatCompletion({
+    provider: "ollama",
+    apiKey: runtime.apiKey,
+    model: "gemma4:e4b",
+    messages: [{ role: "user", content: [{ type: "text", text: "{}" }, { type: "image_url", image_url: { url: "data:image/png;base64,AA" } }] }],
+    responseSchema: schema
+  });
+  assert.equal(withImage.body.reasoning_effort, "low");
+});

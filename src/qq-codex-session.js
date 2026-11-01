@@ -160,9 +160,24 @@ export function upsertQqCodexSessionThread(store, {
     reasoningEffort: String(reasoningEffort || previous?.reasoningEffort || "").slice(0, 40),
     dynamicToolsFingerprint: normalizeToolsFingerprint(dynamicToolsFingerprint)
       || (previous?.threadId === id ? previous.dynamicToolsFingerprint : null),
-    protocolVersion: normalizeProtocolVersion(protocolVersion)
+    protocolVersion: normalizeProtocolVersion(protocolVersion),
+    replyCount: previous?.threadId === id ? previous.replyCount + 1 : 1
   };
   return pruneQqCodexSessionThreads(normalized);
+}
+
+// A long-lived thread is retired once it is older than maxAgeHours or has
+// carried maxReplies replies; either limit at 0 is off. Returns the reason.
+export function getQqCodexSessionRotationReason(thread, {
+  maxAgeHours = 0,
+  maxReplies = 0,
+  now = Date.now()
+} = {}) {
+  if (!thread?.threadId) return "";
+  const createdAt = Date.parse(thread.createdAt || "");
+  if (maxAgeHours > 0 && Number.isFinite(createdAt) && now - createdAt >= maxAgeHours * 60 * 60 * 1000) return "age";
+  if (maxReplies > 0 && Number(thread.replyCount || 0) >= maxReplies) return "replies";
+  return "";
 }
 
 export function removeQqCodexSessionThread(store, scopeId) {
@@ -201,7 +216,8 @@ function normalizeThreadRecord(scopeId, value) {
     model: String(source.model || "").slice(0, 160),
     reasoningEffort: String(source.reasoningEffort || "").slice(0, 40),
     dynamicToolsFingerprint: normalizeToolsFingerprint(source.dynamicToolsFingerprint),
-    protocolVersion: normalizeProtocolVersion(source.protocolVersion)
+    protocolVersion: normalizeProtocolVersion(source.protocolVersion),
+    replyCount: Math.max(0, Math.trunc(Number(source.replyCount) || 0))
   };
 }
 

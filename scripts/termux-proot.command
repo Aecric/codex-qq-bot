@@ -216,4 +216,4 @@ if [ "$MODE" = "prepare" ]; then
 fi
 
 log "进入 $DISTRO PRoot；项目映射到 $GUEST_PROJECT_DIR。"
-run_guest /usr/bin/env bash "$GUEST_PROJECT_DIR/一键部署.command" "${NCC_ARGS[@]}"
+run_guest /usr/bin/env bash "$GUEST_PROJECT_DIR/一键部署.command" ${NCC_ARGS[@]+"${NCC_ARGS[@]}"}

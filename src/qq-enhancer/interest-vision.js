@@ -78,12 +78,26 @@ export function selectQqInterestJudgeImages(event = {}, recentMessages = [], {
 }
 
 // OpenAI-compatible multimodal user content: the original JSON text first,
-// then each picture in the order listed by attachedImages.
+// then each picture in the order listed by attachedImages. Every picture is
+// preceded by a caption naming its source, because small vision models
+// otherwise read an unlabeled trailing picture as the current message.
 export function buildQqInterestImageContent(text, images = []) {
-  const valid = images.filter((image) => /^data:image\/(png|jpeg|gif|webp);base64,/.test(String(image?.dataUrl || "")));
-  if (!valid.length) return text;
-  return [
-    { type: "text", text },
-    ...valid.map((image) => ({ type: "image_url", image_url: { url: image.dataUrl } }))
-  ];
+  const parts = images.flatMap((image, index) => {
+    if (!/^data:image\/(png|jpeg|gif|webp);base64,/.test(String(image?.dataUrl || ""))) return [];
+    return [
+      { type: "text", text: describeQqInterestImage(image, index + 1) },
+      { type: "image_url", image_url: { url: image.dataUrl } }
+    ];
+  });
+  if (!parts.length) return text;
+  return [{ type: "text", text }, ...parts];
+}
+
+function describeQqInterestImage(image, index) {
+  const origin = String(image?.origin || "最近上下文");
+  const sender = String(image?.sender || "").trim();
+  const caption = `【attachedImages 第 ${index} 张】来源：${origin}${sender ? `，发送者：${sender}` : ""}。`;
+  return origin === "当前消息"
+    ? caption
+    : `${caption}这不是当前消息；当前消息的内容以 currentMessage 为准。`;
 }
