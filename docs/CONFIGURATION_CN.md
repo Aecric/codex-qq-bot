@@ -210,6 +210,19 @@ Hub 会先识别 Codex 任务类型，再把上表的任务基础时限按当前
 | `CODEX_REMOTE_CONTACT_AGENT_TOOL_TRANSPORT` | `mcp` | Codex 获取 Hub QQ 工具的方式：`mcp` 由本轮 MCP 服务提供（每次续接都会重新列出），`dynamic` 继续使用 App Server 动态工具。Claude Code 始终使用 MCP。两种方式都在模型搜索工具之前不加载工具定义 |
 | `CODEX_REMOTE_CONTACT_AGENT_LEAN_CONTEXT` | `0` | 只聊天的部署可选开启：设为 `1` 时从 Codex QQ 轮次中去掉连接器、插件、浏览器/电脑操控、子 Agent、目标、技能目录和仓库 AGENTS.md（主人/管理员文件任务保留 AGENTS.md） |
 | `CODEX_REMOTE_CONTACT_QQ_BASE_INSTRUCTIONS` | `engine` | `engine` 保留引擎自带系统提示词；`qq` 在 QQ 回复中换成精简的 QQ 基础提示 |
+| `CODEX_REMOTE_CONTACT_QQ_SELF_PERSONA_GENERATION` | `1` | `0` 停止周期性重写全局自我人格，适合用固定角色卡；范围摘要照常运行。`branding.assistantName` 设为非 `assistant` 时，它就是固定角色名，优先于 QQ 昵称 |
+| `CODEX_REMOTE_CONTACT_QQ_REPLY_SCRUB` | `1` | 发送前删去聊天回复里跳出角色（“根据角色卡”“我正在扮演”）和客服腔（“希望对你有帮助”“随时找我”）的句子；不动关于 AI 身份的如实回答、代码、链接和引号内容；`0` 关闭 |
+| `CODEX_REMOTE_CONTACT_QQ_PROACTIVE_GROUPS` | 空 | 允许不被 @ 也主动接话的群号，逗号分隔；空表示所有白名单群。@、回复 Bot 和续聊不受影响 |
+| `CODEX_REMOTE_CONTACT_QQ_ENGAGED_WINDOW_MESSAGES` | `30` | Bot 在群里回答 @ 后继续观察的真人消息条数：窗口内每条消息都交给兴趣模型判断是否在接 Bot 的话题，Bot 每次在窗口内发出回复都会重新计满；需要开启主动兴趣，`0` 关闭 |
+| `CODEX_REMOTE_CONTACT_QQ_STICKER_MIN_CHANCE` | `0` | 闲聊类回复“本轮适合配表情包”的最低概率（0–1），会超过按群友习惯学习的上限；任务类回复不受影响 |
+| `CODEX_REMOTE_CONTACT_QQ_TASK_PLEADING_ASKS` | `0` | 人设规则：同一个人请 Bot 做事（写代码、查资料、搜索等任务类回复）最多要在 15 分钟内求几次才执行。每轮开始时随机决定：约 20% 一次就答应（“心情好”），约 25% 求两次心软，其余要求满这个次数；没答应的轮次由 Hub 要求只用角色口吻推辞、不做事。执行后清零，计数只在内存里；`0` 或 `1` 关闭 |
+| `CODEX_REMOTE_CONTACT_QQ_SESSION_ROTATE_HOURS` | `0` | 长期会话线程开了超过这么多小时就自动重置：等该群或私聊安静 3 分钟后，先跑一次聊天总结把记忆写进长期知识和印象，再切断线程映射；滚动上下文、印象和知识保留。总结失败则 30 分钟后再试；`0` 关闭 |
+| `CODEX_REMOTE_CONTACT_QQ_SESSION_ROTATE_REPLIES` | `0` | 同上，按线程里累计的回复次数触发；与小时数先到者为准，`0` 关闭 |
+| `CODEX_REMOTE_CONTACT_QQ_QUOTA_SAVER_BELOW` | `0` | 额度省电模式：Codex 5 小时窗口剩余低于这个百分比时，回复改用省电模型、low 思考强度、关闭 Fast，并让所有会话换新线程（记忆、印象、知识和最近聊天都保留）。只有兴趣厂商是 `codex` 时才关闭主动兴趣，`ollama` 等不消耗 Codex 额度的厂商继续判断。原设置存在 `data/qq-quota-guard.json`；`0` 关闭 |
+| `CODEX_REMOTE_CONTACT_QQ_QUOTA_SAVER_RESUME_AT` | `50` | 剩余回到这个百分比或 5 小时窗口重置时退出省电模式，恢复原来的模型、思考强度、服务档位和主动兴趣开关 |
+| `CODEX_REMOTE_CONTACT_QQ_QUOTA_SAVER_MODEL` | `gpt-6-luna` | 省电模式使用的模型 |
+
+上表的自我人格生成、回复清理、主动接话群、@ 后观察条数、表情包最低概率、求几次才干活、会话轮换和额度省电，以及下文兴趣模型的按闲置切换，都可以在仪表盘“智能行为”页修改，保存后立即生效，不用重启。这些环境变量只提供初始值：第一次写入 `data/settings.json` 后以其中的 `qq.behavior` 为准，之后改环境变量不再生效。把额度省电阈值设为 `0` 时，正在进行的省电模式会立即退出并恢复原设置。Gemini 和 Ollama 端点仍只从环境读取，仪表盘只显示状态。
 
 QQ Bot 同时也是能真正干活的 Agent，所以默认保留 Codex 的全部原生功能和引擎自带系统提示词；上下文只通过延迟加载 3–5 千 token 的 QQ 工具目录、不把表情包库放进提示词来缩减。在 Codex 0.163 上实测，一次完整的 QQ 回复请求在默认配置下约 2.15 万输入 token，两个可选开关都打开时约 1.03 万，但会去掉原生能力。
 
@@ -237,12 +250,16 @@ Hub 和 OneBot 两端 token 应一致。未配置 token 时，Webhook 仅信任 
 | `CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE` | `1` | 语义 judge 开关 |
 | `..._JUDGE_EVERY_MESSAGES` | `20` | 普通未 @ 消息阈值，范围 1–1000 |
 | `..._JUDGE_EVERY_MINUTES` | `5` | 非空周期的分钟阈值；`0` 关闭分钟分支 |
-| `..._JUDGE_PROVIDER` | `openrouter` | 兴趣模型厂商：`openrouter`、`deepseek` 或 `custom` |
+| `..._JUDGE_PROVIDER` | `openrouter` | 兴趣模型厂商：`openrouter`、`deepseek`、`custom`、`codex` 或 `ollama` |
 | `..._JUDGE_MODEL` | 随厂商变化 | OpenRouter 默认 `openrouter/free`；DeepSeek 默认 `deepseek-v4-flash` |
 | `..._JUDGE_API_KEY` | 空 | `custom` 厂商的 key |
 | `..._JUDGE_BASE_URL` | 空 | `custom` 厂商的 OpenAI 兼容 API 根地址 |
 | `..._JUDGE_TIMEOUT_MS` | `6500` | judge 流式空闲超时 |
 | `..._JUDGE_VISION` | `auto` | 普通兴趣闸门是否也看被判断消息里的图片（最多 2 张、缩成小 JPEG 预览）：`auto` 对每个厂商/模型先试一次，厂商拒绝图片输入时改为纯文字并记住到重启，`on` 总是尝试，`off` 从不发送图片。图片会发给所配置的第三方兴趣模型服务 |
+| `..._JUDGE_IDLE_SWITCH` | 关闭 | 设为 `1` 时在 macOS 上按主人是否在用电脑选择兴趣厂商：键盘或鼠标 30 秒内有操作时用“使用中厂商”并卸载本机模型；闲置达到阈值后先加载本机模型，再切到“闲置厂商”。额度省电模式下固定用闲置厂商。开启后厂商由它接管 |
+| `..._JUDGE_IDLE_AFTER_SECONDS` | `300` | 闲置多少秒后切到闲置厂商（60–86400） |
+| `..._JUDGE_ACTIVE_PROVIDER` | `codex` | 主人在用电脑时的厂商，使用该厂商默认模型 |
+| `..._JUDGE_IDLE_PROVIDER` | `ollama` | 电脑闲置时的厂商，使用该厂商默认模型 |
 | `CODEX_REMOTE_CONTACT_QQ_IMAGE_MAX_BYTES` | `20971520` | QQ 图片上限，默认 20 MiB |
 | `CODEX_REMOTE_CONTACT_QQ_COMPRESSED_IMAGE_MAX_EDGE` | `1600` | 压缩读取的最长边，范围 256–4096 像素；自动启动按 Hub 内存选择 1280/1600/2048 |
 | `CODEX_REMOTE_CONTACT_QQ_FILE_MAX_BYTES` | `52428800` | 模型按需下载入站 QQ 文件的单文件上限，范围 1 MiB–1 GiB |
@@ -274,8 +291,25 @@ Hub 和 OneBot 两端 token 应一致。未配置 token 时，Webhook 仅信任 
 | `OPENROUTER_BASE_URL` | OpenRouter 官方 API | OpenRouter 端点 |
 | `DEEPSEEK_API_KEY` | 空 | DeepSeek 兴趣模型 key |
 | `DEEPSEEK_BASE_URL` | DeepSeek 官方 API | DeepSeek 端点 |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434/v1` | `ollama` 兴趣厂商使用的 Ollama OpenAI 兼容端点 |
+| `GEMINI_API_KEY` | 空 | 设置后 Bot 多一个 qq_search.ask_gemini 工具，看不懂的梗、谜语和双关可以请 Gemini 解读；密钥只从环境读取 |
+| `CODEX_REMOTE_CONTACT_GEMINI_MODEL` | `gemini-3.8-flash` | ask_gemini 使用的 Gemini 模型 |
 
-仪表盘“智能行为”页或 QQ 主人命令 `/兴趣厂商 openrouter|deepseek|custom` 可切换厂商，`/兴趣模型 模型ID` 可覆盖默认模型。密钥始终只从环境读取，不写入 `data/settings.json`。OpenRouter 使用严格 JSON Schema；DeepSeek 和自定义兼容服务使用 JSON Object 模式。可运行 `npm run ncc -- search-config` 初始化仓库环境文件。排障先看 `/api/maintenance` 和 `search` / `interest` 日志。
+仪表盘“智能行为”页或 QQ 主人命令 `/兴趣厂商 openrouter|deepseek|custom|codex|ollama` 可切换厂商，`/兴趣模型 模型ID` 可覆盖默认模型。密钥始终只从环境读取，不写入 `data/settings.json`。OpenRouter 使用严格 JSON Schema；DeepSeek 和自定义兼容服务使用 JSON Object 模式。`codex` 不需要 key：每次判断都是本机 Codex 登录上的一轮无工具、低思考强度任务（默认模型 `gpt-6-luna`），与回复共用 Codex 队列。`ollama` 同样不需要 key：调用本机 Ollama（默认模型 `gemma4:e4b-it-qat`，4-bit 量化，运行时约 4GB；16GB 内存的机器上非量化版约 10GB，会把 NapCat 挤进 swap），关闭思考（只有附带图片时用 `low` 短暂思考，否则小模型容易误读图片来源）并发送 `keep_alive: -1` 让模型常驻，单次判断只需几秒；使用前先 `ollama pull gemma4:e4b-it-qat`。可运行 `npm run ncc -- search-config` 初始化仓库环境文件。排障先看 `/api/maintenance` 和 `search` / `interest` 日志。
+
+### 角色卡
+
+仪表盘“行为”页可以编辑或上传角色卡（`.md`、`.txt`），保存后下一条回复起生效，不用重启。内容保存在 `CODEX_REMOTE_CONTACT_ASSISTANT_PROFILE_PATH` 指向的文件；没设置时保存到 `config/characters/assistant-profile.md`。上一版保留为同目录的 `<文件名>.bak`。角色卡最多 6000 字符，超出时网页拒绝保存；手动改文件超长时只使用前 6000 字符，并写一条警告日志。角色卡每轮都会带上，世界观等只在聊到时才需要的资料放知识库。
+
+### 知识库导入导出
+
+仪表盘“知识”页提供三个操作：
+
+- **下载模板**：ZIP 内有 `README.md`、`notes.md`（知识）和 `slang.md`（黑话）。每个标题是一条，标题下第一行可写 `别名：a, b`；`slang.md` 也可以每行写一条 `词语：含义`。
+- **导出备份**：ZIP 内有 `README.md`、`knowledge.json` 和 `images/`，保留每条的类型、别名、范围和配图。备份可能含有聊天内容、群号和 QQ 号，请妥善保管。配图总量超过 24 MiB 时多余的不打包，页面会提示数量。
+- **导入**：接受 ZIP、`.md` 和 `.txt`，不超过 32 MiB。先预览，勾选条目后选择应用到全局或指定的群；备份还可以保留原来的范围。
+
+导入只新增或更新，不删除；相同标题在相同范围内被新内容覆盖。标题最多 80 字符，内容每条最多 800 字符：知识超长时拆成“标题（2）”，黑话超长时截断，预览里都会提示。知识库总共最多 500 条，导入超出时整次不生效。接口是 `GET /api/qq/knowledge/template`、`GET /api/qq/knowledge/export` 和 `POST /api/qq/knowledge/import`。
 
 ### 日志
 

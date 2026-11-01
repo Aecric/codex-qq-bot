@@ -438,7 +438,18 @@ import { createWebSearch, formatWebSearchProviderName } from "./web-search.js";
 import { isSupportedImageContentType, readResponseJson, writeResponseBodyToFile } from "./bounded-stream.js";
 import { runJsonProcess } from "./process-runner.js";
 import { createDashboardAssetHandler } from "./dashboard-assets.js";
-import { applyDashboardBotSettings, readDashboardBotSettings } from "./dashboard-bot-settings.js";
+import { createAssistantProfileStore, fitAssistantProfile } from "./dashboard-character-card.js";
+import {
+  applyKnowledgeImport,
+  buildKnowledgeBackupArchive,
+  buildKnowledgeTemplateArchive,
+  knowledgeImportMaxBytes,
+  normalizeKnowledgeImportScope,
+  parseKnowledgeUpload,
+  prepareKnowledgeImportImages,
+  summarizeKnowledgeImportItems
+} from "./knowledge-package.js";
+import { applyDashboardBotSettings, normalizeQqBehaviorSettings, readDashboardBotSettings } from "./dashboard-bot-settings.js";
 import { selectLanAccessAddresses } from "./network-access.js";
 import { createPublicTunnelManager } from "./public-tunnel.js";
 import { requestHasValidToken } from "./request-auth.js";
@@ -519,6 +530,12 @@ const {
   assistantProfilePath
 } = createRuntimePaths({ projectDir });
 const settingsRepository = createSettingsRepository({ filePath: settingsPath });
+// The dashboard's card editor needs somewhere to save on a deployment that has
+// not pointed the environment variable at its own file.
+const assistantProfileStore = createAssistantProfileStore({
+  filePath: assistantProfilePath || join(projectDir, "config", "characters", "assistant-profile.md")
+});
+let assistantProfileTruncationLogged = false;
 const {
   logMaxBytes,
   logMaxFiles,
@@ -565,10 +582,6 @@ const {
   qqProactiveJudgeModel,
   qqProactiveJudgeTimeoutMs,
   qqProactiveJudgeVision,
-  qqJudgeIdleSwitchEnabled,
-  qqJudgeIdleSwitchAfterSeconds,
-  qqJudgeIdleSwitchActiveProvider,
-  qqJudgeIdleSwitchIdleProvider,
   qqProactiveJudgeMinInterest,
   qqSelfPersonaScopeInitialMessages,
   qqSelfPersonaScopeMessages,
@@ -580,17 +593,6 @@ const {
   qqSelfPersonaGenerationScopeSummaries,
   qqSelfPersonaGenerationCooldownHours,
   qqSelfPersonaFailureRetryHours,
-  qqSelfPersonaGenerationEnabled,
-  qqReplyScrubEnabled,
-  qqProactiveGroupIds,
-  qqEngagedWindowMessages,
-  qqStickerMinChance,
-  qqQuotaSaverBelow,
-  qqQuotaSaverResumeAt,
-  qqQuotaSaverModel,
-  qqSessionRotateHours,
-  qqSessionRotateReplies,
-  qqTaskPleadingAsks,
   qqWebLookupEnabled,
   qqWebLookupTimeoutMs,
   qqWebLookupAttemptTimeoutMs,
@@ -1323,6 +1325,9 @@ async function loadSettings() {
     }
     if (body.qq?.webLookup && typeof body.qq.webLookup === "object") {
       state.qq.webLookup.enabled = body.qq.webLookup.enabled !== false;
+    }
+    if (body.qq?.behavior && typeof body.qq.behavior === "object") {
+      state.qq.behavior = normalizeQqBehaviorSettings(body.qq.behavior, state.qq.behavior);
     }
     if (body.qq?.proactive && typeof body.qq.proactive === "object") {
       state.qq.proactive.enabled = state.qq.enhancer.enabled && body.qq.proactive.enabled !== false;
@@ -2587,7 +2592,7 @@ async function refreshQqSelfPersona() {
 
   // A fixed character card can opt out of periodic global persona rewrites;
   // scope summaries still run for knowledge and topic context.
-  const generation = qqSelfPersonaGenerationEnabled
+  const generation = state.qq.behavior.selfPersonaGenerationEnabled
     ? await runQqGlobalSelfPersonaGeneration({ source: "periodic" })
     : { ok: false };
   if (!generation.ok) {
@@ -2905,18 +2910,18 @@ async function commitQqCodexSessionForEvent(event) {
 // they use the computer, the local idle provider once it has been idle. The
 // local model is loaded before the switch (a cold load outlasts the judge's
 // token deadline) and unloaded when the owner comes back.
-const qqInterestIdleSwitch = qqJudgeIdleSwitchEnabled ? createQqInterestIdleSwitch({
+const qqInterestIdleSwitch = createQqInterestIdleSwitch({
   readIdleSeconds: () => readHostIdleSeconds(),
   getOptions: () => ({
     current: state.qq.proactive.judge.provider,
-    activeProvider: qqJudgeIdleSwitchActiveProvider,
-    idleProvider: qqJudgeIdleSwitchIdleProvider,
-    idleAfterSeconds: qqJudgeIdleSwitchAfterSeconds,
-    pinIdleProvider: qqQuotaGuardState.active && !qqQuotaSaverKeepsInterestJudge(qqJudgeIdleSwitchActiveProvider)
+    activeProvider: state.qq.behavior.judgeActiveProvider,
+    idleProvider: state.qq.behavior.judgeIdleProvider,
+    idleAfterSeconds: state.qq.behavior.judgeIdleAfterSeconds,
+    pinIdleProvider: qqQuotaGuardState.active && !qqQuotaSaverKeepsInterestJudge(state.qq.behavior.judgeActiveProvider)
   }),
   apply: applyQqInterestIdleSwitch,
   onError: (error) => logger.warn("QQ interest idle switch failed", { error }, "interest")
-}) : null;
+});
 
 // Saver mode state survives restarts so the owner's own model, effort, tier
 // and interest setting can always be restored afterwards.
@@ -2930,12 +2935,17 @@ try {
 let qqQuotaGuardJob = null;
 
 function maybeApplyQqQuotaGuard(quota) {
-  if (qqQuotaGuardJob || !(qqQuotaSaverBelow > 0) || agentEngine !== "codex") return;
-  const decision = decideQqQuotaGuard(quota, {
-    active: qqQuotaGuardState.active,
-    enterBelowPercent: qqQuotaSaverBelow,
-    exitAtPercent: qqQuotaSaverResumeAt
-  });
+  if (qqQuotaGuardJob || agentEngine !== "codex") return;
+  const { quotaSaverBelow, quotaSaverResumeAt } = state.qq.behavior;
+  // Turning saver mode off from the dashboard must also bring back the saved
+  // model and settings when it is currently active.
+  const decision = quotaSaverBelow > 0
+    ? decideQqQuotaGuard(quota, {
+      active: qqQuotaGuardState.active,
+      enterBelowPercent: quotaSaverBelow,
+      exitAtPercent: quotaSaverResumeAt
+    })
+    : (qqQuotaGuardState.active ? "exit" : null);
   if (!decision) return;
   const job = applyQqQuotaGuard(decision, quota).finally(() => {
     qqQuotaGuardJob = null;
@@ -2956,10 +2966,10 @@ async function applyQqQuotaGuard(decision, quota) {
         proactiveEnabled: Boolean(state.qq.proactive.enabled)
       }
     };
-    state.ai.model = qqQuotaSaverModel;
+    state.ai.model = state.qq.behavior.quotaSaverModel;
     state.ai.reasoningEffort = "low";
     state.ai.serviceTier = "";
-    const saverJudgeProvider = qqInterestIdleSwitch ? qqJudgeIdleSwitchIdleProvider : state.qq.proactive.judge.provider;
+    const saverJudgeProvider = state.qq.behavior.judgeIdleSwitchEnabled ? state.qq.behavior.judgeIdleProvider : state.qq.proactive.judge.provider;
     if (!qqQuotaSaverKeepsInterestJudge(saverJudgeProvider)) state.qq.proactive.enabled = false;
   } else {
     const saved = qqQuotaGuardState.saved || {};
@@ -2975,7 +2985,7 @@ async function applyQqQuotaGuard(decision, quota) {
     state.qq.codexSession.store = removeQqCodexSessionThread(state.qq.codexSession.store, scopeId);
   }
   await Promise.all([saveSettings(), saveQqCodexSessions(), writeJsonAtomically(qqQuotaGuardPath, qqQuotaGuardState)]);
-  if (qqInterestIdleSwitch) trackBackgroundTask(qqInterestIdleSwitch.refresh(), () => {});
+  if (state.qq.behavior.judgeIdleSwitchEnabled) trackBackgroundTask(qqInterestIdleSwitch.refresh(), () => {});
   logger.warn(decision === "enter" ? "QQ quota saver mode entered" : "QQ quota saver mode left", {
     remainingPercent: quota?.primary?.remainingPercent ?? null,
     resetsAt: quota?.primary?.resetsAt ?? null,
@@ -3015,12 +3025,13 @@ const qqSessionRotationRetryAtByScope = new Map();
 let qqSessionRotationJob = null;
 
 function maybeRotateQqCodexSessions() {
-  if (qqSessionRotationJob || shuttingDown || !(qqSessionRotateHours > 0 || qqSessionRotateReplies > 0)) return;
+  const { sessionRotateHours, sessionRotateReplies } = state.qq.behavior;
+  if (qqSessionRotationJob || shuttingDown || !(sessionRotateHours > 0 || sessionRotateReplies > 0)) return;
   const now = Date.now();
   for (const thread of Object.values(state.qq.codexSession.store.threads || {})) {
     const reason = getQqCodexSessionRotationReason(thread, {
-      maxAgeHours: qqSessionRotateHours,
-      maxReplies: qqSessionRotateReplies,
+      maxAgeHours: sessionRotateHours,
+      maxReplies: sessionRotateReplies,
       now
     });
     if (!reason || Number(qqSessionRotationRetryAtByScope.get(thread.scopeId) || 0) > now) continue;
@@ -3231,6 +3242,14 @@ function buildPublicState() {
       enhancer: { enabled: state.qq.enhancer.enabled },
       webLookup: { enabled: state.qq.webLookup.enabled },
       botSettings: readDashboardBotSettings(state),
+      botRuntime: {
+        quotaSaverActive: Boolean(qqQuotaGuardState.active),
+        quotaSaverSince: qqQuotaGuardState.since || null,
+        engagedGroups: Object.keys(qqEngagedWindows.snapshot()).length,
+        geminiConfigured: Boolean(environmentConfig.geminiApiKey),
+        geminiModel: environmentConfig.geminiModel,
+        ollamaBaseUrl: environmentConfig.ollamaBaseUrl
+      },
       codexSession: {
         defaultMode: state.qq.codexSession.settings.defaultMode,
         scopes: { ...state.qq.codexSession.settings.scopes },
@@ -9999,16 +10018,21 @@ async function buildAssistantInstructions(event) {
 }
 
 async function loadAssistantSkillBrief() {
-  // Deployment customization: this release build has no baked-in style. Put
-  // custom style rules in CODEX_REMOTE_CONTACT_ASSISTANT_PROFILE_PATH.
-  const text = assistantProfilePath ? await readFile(assistantProfilePath, "utf8").catch(() => "") : "";
-  if (!text) {
+  // Deployment customization: this release build has no baked-in style. Custom
+  // style rules live in the dashboard's character card, which is the file at
+  // CODEX_REMOTE_CONTACT_ASSISTANT_PROFILE_PATH when that is set.
+  const { content, truncated } = fitAssistantProfile(await assistantProfileStore.read().catch(() => ""));
+  if (!content) {
     return "未配置额外 profile；使用上面的通用 QQ 助手语气。";
+  }
+  if (truncated && !assistantProfileTruncationLogged) {
+    assistantProfileTruncationLogged = true;
+    logger.warn("Character card is over the limit and was cut", { maxChars: assistantProfileStore.maxChars }, "qq");
   }
   return [
     "部署者自定义 profile：",
-    text
-  ].join("\n").slice(0, 1800);
+    content
+  ].join("\n");
 }
 
 function extractSection(text, startMarker, endMarker) {
@@ -10133,7 +10157,7 @@ async function buildModelReply(event, { replyScope = null } = {}) {
   const humanChatStyle = adaptiveSignals
     ? personalizeQqHumanStyle(baseHumanChatStyle, adaptiveSignals)
     : baseHumanChatStyle;
-  const humanBehaviorPlan = buildQqHumanBehaviorPlan(event, conversationIntent, humanChatStyle, { text, stickerMinChance: qqStickerMinChance });
+  const humanBehaviorPlan = buildQqHumanBehaviorPlan(event, conversationIntent, humanChatStyle, { text, stickerMinChance: state.qq.behavior.stickerMinChance });
   // Sticker-friendly turns get a few ready candidates so a sticker does not
   // always cost a tool search; the full library stays behind qq_sticker.
   const stickerCatalog = state.qq.enhancer.enabled ? await buildQqStickerCatalog(qqStickerDir) : [];
@@ -10317,7 +10341,7 @@ async function buildModelReply(event, { replyScope = null } = {}) {
       outputDir: taskWorkspace.outputDir,
       generatedAfterMs: turnStartedAt,
       maxImageBytes: qqImageMaxBytes,
-      scrubBubbles: qqReplyScrubEnabled ? scrubQqReplyBubbles : null
+      scrubBubbles: state.qq.behavior.replyScrubEnabled ? scrubQqReplyBubbles : null
     });
     logQqGeneratedAttachmentImport(parsed, event, result);
     event.qqAgentStructuredOutput = parsed.structured;
@@ -13281,9 +13305,9 @@ const codexInterestFetch = createCodexInterestFetch({
   }
 });
 
-const qqEngagedWindows = createQqEngagedWindows({ size: qqEngagedWindowMessages, onChange: () => saveQqChatContinuity() });
+const qqEngagedWindows = createQqEngagedWindows({ size: state.qq.behavior.engagedWindowMessages, onChange: () => saveQqChatContinuity() });
 const QQ_ENGAGED_JUDGE_WAIT_MS = 30_000;
-const qqTaskPleading = createQqTaskPleadingTracker({ required: qqTaskPleadingAsks, onChange: () => saveQqChatContinuity() });
+const qqTaskPleading = createQqTaskPleadingTracker({ required: state.qq.behavior.taskPleadingAsks, onChange: () => saveQqChatContinuity() });
 // Open watch windows and unfinished task pleas are saved so a Hub restart
 // does not cut off a conversation that is still going.
 const qqChatContinuityPath = join(projectDir, "data", "qq-chat-continuity.json");
@@ -13333,8 +13357,31 @@ function getQqTaskPleadingKey(event) {
   return `${getQqMemoryScopeId(event) || ""}:${event?.senderId || ""}`;
 }
 
+function sendZipDownload(res, archive, fileName, headers = {}) {
+  res.writeHead(200, {
+    "content-type": "application/zip",
+    "content-length": archive.length,
+    "content-disposition": `attachment; filename="${fileName}"`,
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    ...headers
+  });
+  res.end(archive);
+  return true;
+}
+
 function isQqProactiveGroup(groupId) {
-  return qqProactiveGroupIds.length === 0 || qqProactiveGroupIds.includes(String(groupId || ""));
+  const groupIds = state.qq.behavior.proactiveGroupIds;
+  return groupIds.length === 0 || groupIds.includes(String(groupId || ""));
+}
+
+// Pushes the saved behavior settings into the long-lived helpers that keep
+// their own copy, at startup and after each dashboard change.
+function syncQqBehaviorRuntime() {
+  qqEngagedWindows.resize(state.qq.behavior.engagedWindowMessages);
+  qqTaskPleading.setRequired(state.qq.behavior.taskPleadingAsks);
+  if (state.qq.behavior.judgeIdleSwitchEnabled) qqInterestIdleSwitch.start();
+  else trackBackgroundTask(qqInterestIdleSwitch.stop(), () => {});
 }
 
 async function ensureCodexReplyWorkspace() {
@@ -14743,6 +14790,110 @@ async function handleApi(req, res) {
     return true;
   }
 
+  if (req.method === "GET" && req.url === "/api/qq/character-card") {
+    return sendJson(res, 200, {
+      ...await assistantProfileStore.readSummary(),
+      fileName: basename(assistantProfileStore.filePath)
+    });
+  }
+
+  if (req.method === "POST" && req.url === "/api/qq/character-card") {
+    const body = await readBody(req, { requireJson: true });
+    let summary;
+    try {
+      summary = await assistantProfileStore.save(body.content);
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) return sendJson(res, 400, { error: error.message });
+      throw error;
+    }
+    assistantProfileTruncationLogged = false;
+    logger.info("Dashboard character card updated", { source: "dashboard", outcome: "persisted", chars: summary.chars }, "qq");
+    return sendJson(res, 200, { ...summary, fileName: basename(assistantProfileStore.filePath) });
+  }
+
+  if (req.method === "GET" && req.url === "/api/qq/knowledge/template") {
+    return sendZipDownload(res, buildKnowledgeTemplateArchive(), "knowledge-template.zip");
+  }
+
+  if (req.method === "GET" && req.url === "/api/qq/knowledge/export") {
+    const backup = await buildKnowledgeBackupArchive(state.qq.knowledgeBase, {
+      readImage: (id) => qqMemoryImageStore.read(id)
+    });
+    logger.info("Dashboard QQ knowledge exported", {
+      source: "dashboard",
+      outcome: "exported",
+      entries: backup.entries,
+      images: backup.images,
+      omittedImages: backup.omittedImages
+    }, "memory");
+    const day = new Date().toISOString().slice(0, 10);
+    return sendZipDownload(res, backup.archive, `knowledge-backup-${day}.zip`, {
+      "x-knowledge-omitted-images": String(backup.omittedImages)
+    });
+  }
+
+  if (req.method === "POST" && req.url === "/api/qq/knowledge/import") {
+    if (!qqKnowledgeBaseRepository.writable) {
+      return sendJson(res, 409, {
+        error: "QQ knowledge base is read-only because its persisted file did not load safely"
+      });
+    }
+    const body = await readBody(req, { requireJson: true, maxBytes: Math.ceil(knowledgeImportMaxBytes * 4 / 3) + 64 * 1024 });
+    let parsed;
+    let items;
+    let scope;
+    try {
+      const data = Buffer.from(String(body.data || ""), "base64");
+      if (data.length > knowledgeImportMaxBytes) throw new RangeError("import file is too large");
+      parsed = parseKnowledgeUpload({ fileName: String(body.fileName || ""), data, defaultKind: body.defaultKind });
+      if (body.dryRun === true) {
+        return sendJson(res, 200, {
+          format: parsed.format,
+          items: summarizeKnowledgeImportItems(state.qq.knowledgeBase, parsed.items),
+          warnings: parsed.warnings
+        });
+      }
+      scope = normalizeKnowledgeImportScope(body.scope);
+      const selected = Array.isArray(body.selected) ? new Set(body.selected.map(Number)) : null;
+      items = selected ? parsed.items.filter((_, index) => selected.has(index)) : parsed.items;
+      if (items.length === 0) throw new RangeError("choose at least one entry to import");
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) return sendJson(res, 400, { error: error.message });
+      throw error;
+    }
+    const images = await prepareKnowledgeImportImages(items, (data) => qqMemoryImageStore.importBuffer(data));
+    let result;
+    try {
+      result = applyKnowledgeImport(state.qq.knowledgeBase, items, scope, { storedImages: images.stored });
+    } catch (error) {
+      if (error instanceof DashboardKnowledgeConflictError) return sendJson(res, 409, { error: error.message });
+      if (error instanceof TypeError || error instanceof RangeError) return sendJson(res, 400, { error: error.message });
+      throw error;
+    }
+    const previousStore = state.qq.knowledgeBase;
+    state.qq.knowledgeBase = result.store;
+    try {
+      await saveQqKnowledgeBase();
+    } catch (error) {
+      state.qq.knowledgeBase = previousStore;
+      throw error;
+    }
+    logger.info("Dashboard QQ knowledge imported", {
+      source: "dashboard",
+      outcome: "persisted",
+      format: parsed.format,
+      scope: scope.mode,
+      groups: scope.groupIds?.length || 0,
+      imagesFailed: images.failed,
+      ...result.counts
+    }, "memory");
+    return sendJson(res, 200, {
+      ...await buildMemorySnapshot(),
+      mutation: result.mutation,
+      imported: { ...result.counts, imagesFailed: images.failed }
+    });
+  }
+
   if (req.method === "POST" && req.url === "/api/qq/knowledge/images") {
     if (!qqKnowledgeBaseRepository.writable) {
       return sendJson(res, 409, {
@@ -14948,6 +15099,8 @@ async function handleApi(req, res) {
       change.restore();
       throw error;
     }
+    syncQqBehaviorRuntime();
+    maybeApplyQqQuotaGuard(state.maintenance.codex.quota);
     logger.info("Dashboard Bot settings updated", buildQqOperationLogDetails(null, {
       operation: "settings.update",
       outcome: "persisted",
@@ -15335,7 +15488,7 @@ function scheduleHubRebind(nextHost) {
 }
 
 await listenHub(currentHubHost);
-qqInterestIdleSwitch?.start();
+syncQqBehaviorRuntime();
 if (state.network.publicTunnelEnabled) {
   trackBackgroundTask(
     publicTunnelManager.start().then((tunnelStatus) => logger.success("Dashboard public tunnel started", {
@@ -15359,7 +15512,7 @@ function shutdown(signal) {
     state.channels.qq = false;
     qqAvatarRefreshQueue.stop();
     const stopPeriodicScheduler = qqPeriodicScheduler?.stop?.() || Promise.resolve();
-    const stopInterestIdleSwitch = qqInterestIdleSwitch?.stop() || Promise.resolve();
+    const stopInterestIdleSwitch = qqInterestIdleSwitch.stop();
     qqPeriodicScheduler = null;
     const shutdownError = new Error("Hub is shutting down");
     shutdownError.code = "HUB_SHUTTING_DOWN";

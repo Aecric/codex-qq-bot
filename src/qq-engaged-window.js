@@ -6,7 +6,8 @@
 // window untouched for `idleMs` lapses.
 
 export function createQqEngagedWindows({ size = 30, idleMs = 30 * 60_000, now = Date.now, onChange = () => {} } = {}) {
-  const windowSize = Math.max(0, Math.round(Number(size) || 0));
+  const normalizeSize = (value) => Math.max(0, Math.round(Number(value) || 0));
+  let windowSize = normalizeSize(size);
   const windowsByGroupId = new Map();
   const live = (id) => {
     const entry = windowsByGroupId.get(id);
@@ -23,7 +24,22 @@ export function createQqEngagedWindows({ size = 30, idleMs = 30 * 60_000, now = 
     onChange();
   };
   return {
-    size: windowSize,
+    get size() {
+      return windowSize;
+    },
+    // Applies a new size at runtime; open windows never exceed it, and a zero
+    // size closes them.
+    resize(value) {
+      windowSize = normalizeSize(value);
+      let changed = false;
+      for (const [id, entry] of windowsByGroupId) {
+        if (entry.remaining <= windowSize) continue;
+        changed = true;
+        if (windowSize > 0) entry.remaining = windowSize;
+        else windowsByGroupId.delete(id);
+      }
+      if (changed) onChange();
+    },
     open(groupId) {
       if (windowSize > 0 && groupId) set(String(groupId), windowSize);
     },

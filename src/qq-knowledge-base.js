@@ -11,6 +11,7 @@ const markerPattern = /\[\[(?:qq_knowledge|qq_kb):(\{[^\n]*?\})\]\]/g;
 const anyMarkerPattern = /\[\[(?:qq_knowledge|qq_kb):[\s\S]*?\]\]/g;
 const validScopeTypes = new Set(["global", "group", "member", "group-member"]);
 const maxEntries = 500;
+export const qqKnowledgeMaxEntries = maxEntries;
 const maxVariantsPerEntry = 32;
 const maxSourcesPerVariant = 12;
 export const qqKnowledgeMaxImagesPerVariant = 4;

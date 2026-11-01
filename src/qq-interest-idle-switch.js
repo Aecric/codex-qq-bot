@@ -50,6 +50,7 @@ export function createQqInterestIdleSwitch({
   };
   const schedule = () => {
     if (stopped) return;
+    clearTimeout(timer);
     timer = setTimeout(() => run().finally(schedule), intervalMs);
     timer.unref?.();
   };

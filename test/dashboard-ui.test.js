@@ -57,3 +57,11 @@ test("dashboard keeps code and styles external so the strict CSP holds", () => {
     assert.equal(body.trim(), "", "inline script bodies are not allowed");
   }
 });
+
+test("dashboard offers every interest provider in each provider select", () => {
+  for (const id of ["botJudgeProvider", "botIdleActiveProvider", "botIdleIdleProvider"]) {
+    const select = html.match(new RegExp(`<select id="${id}">([\\s\\S]*?)</select>`))?.[1] || "";
+    const values = [...select.matchAll(/value="([^"]+)"/g)].map((match) => match[1]);
+    assert.deepEqual(values, ["openrouter", "deepseek", "custom", "codex", "ollama"], id);
+  }
+});

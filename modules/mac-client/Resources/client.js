@@ -3,6 +3,29 @@ const STORAGE_PREFIX = "codexRemoteContact.";
 const validViews = new Set(["overview", "channels", "intelligence", "memory", "knowledge", "activity", "settings"]);
 const engineNames = { codex: "Codex", claude: "Claude Code" };
 
+const JUDGE_PROVIDER_IDS = ["openrouter", "deepseek", "custom", "codex", "ollama"];
+// Behavior controls that share one treatment: setting key -> form control id.
+const BOT_BEHAVIOR_TOGGLES = {
+  selfPersonaGenerationEnabled: "#botPersonaGenerationToggle",
+  replyScrubEnabled: "#botReplyScrubToggle",
+  judgeIdleSwitchEnabled: "#botIdleSwitchToggle"
+};
+const BOT_BEHAVIOR_NUMBERS = {
+  engagedWindowMessages: "#botEngagedWindow",
+  stickerMinChance: "#botStickerChance",
+  taskPleadingAsks: "#botTaskPleading",
+  sessionRotateHours: "#botRotateHours",
+  sessionRotateReplies: "#botRotateReplies",
+  quotaSaverBelow: "#botSaverBelow",
+  quotaSaverResumeAt: "#botSaverResume",
+  judgeIdleAfterSeconds: "#botIdleAfter"
+};
+const BOT_BEHAVIOR_TEXTS = {
+  quotaSaverModel: "#botSaverModel",
+  judgeActiveProvider: "#botIdleActiveProvider",
+  judgeIdleProvider: "#botIdleIdleProvider"
+};
+
 const translations = {
   zh: {
     skipToContent: "跳到主要内容", mainNavigation: "主导航", mobileNavigation: "移动端导航", brandHome: "控制台首页", brandSubtitle: "本地控制台", engineLabel: "AI 引擎",
@@ -34,6 +57,17 @@ const translations = {
     botControlHeading: "功能开关与调试参数", botControlBody: "开关立即生效；判定参数只影响主动兴趣，不影响直接 @ Bot 的回复。",
     settingsSynced: "设置已同步", settingsUnsaved: "有未保存的修改", settingsSaving: "正在保存", settingsSaveFailed: "保存失败",
     qqEnhancerFeature: "QQ 增强能力", qqEnhancerFeatureHint: "图片上下文、自然表达与扩展行为的总开关。", webLookupFeature: "联网查询", webLookupFeatureHint: "允许 Bot 在需要时调用已配置的搜索服务。", proactiveFeature: "主动兴趣", proactiveFeatureHint: "允许普通群消息、冷群和私聊进入主动判断。", interestJudgeFeature: "兴趣模型判定", interestJudgeFeatureHint: "用所选服务的模型判断是否值得自然接话。",
+    judgeProviderCodex: "本机 Codex", judgeProviderOllama: "本机 Ollama", botGroupChat: "聊天行为", botGroupQuotaSaver: "Codex 额度省电", botGroupIdleSwitch: "兴趣模型自动切换",
+    selfPersonaGenerationFeature: "自我人格生成", selfPersonaGenerationHint: "定期重写全局人设；用固定角色卡时可关闭，范围摘要照常运行。", replyScrubFeature: "回复清理", replyScrubHint: "发送前删去跳出角色和客服腔的句子，不动代码、链接和引号内容。",
+    proactiveGroups: "主动接话群", proactiveGroupsHint: "逗号分隔；留空表示所有白名单群。@ 和续聊不受影响。", proactiveGroupsPlaceholder: "所有白名单群", engagedWindow: "@ 后观察条数", engagedWindowHint: "回答 @ 后继续观察的真人消息数；需开启主动兴趣，0 关闭。", stickerMinChance: "表情包最低概率", stickerMinChanceHint: "闲聊回复配表情包的最低概率，0–1。",
+    taskPleading: "求几次才干活", taskPleadingHint: "同一人 15 分钟内最多要求几次才执行任务；0 或 1 关闭。", sessionRotateHours: "会话轮换（小时）", sessionRotateHoursHint: "线程超过这么久后先总结记忆再换新线程；0 关闭。", sessionRotateReplies: "会话轮换（回复数）", sessionRotateRepliesHint: "线程累计回复达到后轮换，与小时数先到者为准；0 关闭。",
+    quotaSaverBelow: "低于此剩余进入（%）", quotaSaverBelowHint: "5 小时窗口剩余低于它时改用省电模型和 low 思考，并换新线程；0 关闭。", quotaSaverResume: "回到此剩余退出（%）", quotaSaverResumeHint: "必须大于进入阈值；窗口重置时也会退出。", quotaSaverModel: "省电模型", quotaSaverModelHint: "下次进入省电模式时使用。",
+    idleSwitchFeature: "按闲置切换服务", idleSwitchHint: "仅 macOS：按主人是否在用电脑选择服务；开启后上方的模型服务由它接管。", idleAfter: "闲置阈值（秒）", idleAfterHint: "闲置这么久后切到闲置服务，60–86400。", idleActiveProvider: "使用中服务", idleActiveProviderHint: "主人在用电脑时使用，取该服务默认模型。", idleIdleProvider: "闲置时服务", idleIdleProviderHint: "电脑闲置时使用，取该服务默认模型。",
+    diagQuotaSaverActive: "省电模式：进行中", diagQuotaSaverIdle: "省电模式：待命", diagQuotaSaverOff: "省电模式：关闭", diagIdleSwitch: "自动切换：{active} / {idle}", diagEngagedGroups: "观察中的群：{value}", diagGeminiReady: "Gemini：{value}", diagGeminiMissing: "Gemini Key 未配置", diagOllama: "Ollama：{value}",
+    characterCard: "角色卡", characterCardHint: "Bot 的身份和说话方式，每次回复都会带上，下一条回复起生效。世界观等资料放到知识库更省上下文。", characterCardPlaceholder: "# 角色卡", characterCardUpload: "上传文件", characterCardSave: "保存角色卡", characterCardSaved: "角色卡已保存", characterCardCount: "{chars} / {max} 字符", characterCardFile: "文件：{value}", characterCardTooLong: "角色卡超过 {max} 字符，请先精简", characterCardReplace: "用文件 {value} 替换编辑框里的内容？保存后才会生效。",
+    knowledgeTemplate: "下载模板", knowledgeExport: "导出备份", knowledgeImport: "导入", knowledgeExported: "备份已导出", knowledgeExportedPartial: "备份已导出，但有 {value} 张配图因体积过大或无法读取而未包含", knowledgeImportTitle: "导入知识库", knowledgeImportFile: "文件", knowledgeImportDefaultKind: "单个文本文件的类型", knowledgeImportHint: "支持 ZIP 包和 .md、.txt 文件，不超过 32 MB。ZIP 包按 notes.md、slang.md 分类，写法见模板里的 README。", knowledgeImportSelectAll: "全选", knowledgeImportScope: "应用到", knowledgeImportScopeKeep: "保留备份里的范围", knowledgeImportScopeGlobal: "全局（所有群和私聊）", knowledgeImportScopeGroups: "指定的群", knowledgeImportExtraGroups: "其他群号", knowledgeImportExtraGroupsHint: "多个群号用逗号分隔", knowledgeImportConfirm: "导入所选",
+    knowledgeImportSummary: "共 {total} 条：知识 {notes}，黑话 {slang}", knowledgeImportExists: "已存在", knowledgeImportImages: "{value} 张配图", knowledgeImportTooLarge: "文件超过 32 MB", knowledgeImportNoGroups: "请至少选择一个群", knowledgeImportNoneSelected: "请至少勾选一条", knowledgeImportDone: "导入完成：新增 {created}，更新 {updated}，未变 {unchanged}", knowledgeImportDoneImages: "，配图 {images}", knowledgeImportImagesFailed: "，{value} 张配图未能导入",
+    knowledgeImportWarnSplit: "“{title}”过长，拆成 {parts} 条", knowledgeImportWarnCut: "“{title}”过长，内容被截断", knowledgeImportWarnTitleCut: "标题过长被截断：{title}", knowledgeImportWarnSkipped: "已跳过无法识别的内容：{title}", knowledgeImportWarnImage: "“{title}”的配图在压缩包中缺失", scopeGlobalShort: "全局", scopeGroupShort: "群 {value}", scopeMemberShort: "成员 {value}",
     judgeEveryMessages: "消息间隔", judgeEveryMinutes: "分钟间隔", judgeProvider: "模型服务", judgeProviderCustom: "自定义兼容服务", judgeModel: "判定模型", judgeTimeout: "静默超时（ms）", judgeRecentMessages: "最近上下文", saveBotSettings: "保存 Bot 设置", botSettingsSaved: "Bot 设置已保存", waitingBotSettings: "等待 Bot 设置",
     diagEngine: "引擎：{value}", diagJudgeProvider: "判定服务：{value}", diagJudgeKeyReady: "判定 Key 已配置", diagJudgeKeyMissing: "判定 Key 未配置", diagSearchProvider: "搜索：{value}", diagSafeFetch: "安全下载：{value}", safeFetchProxy: "代理兼容", safeFetchStrict: "严格", diagActiveGeneration: "生成中：{value}", diagPendingReplies: "待回复：{value}",
     selfPersona: "Bot 全局人设", selfPersonaHint: "从各群和私聊的匿名摘要生成；QQ 昵称固定作为名字。", viewDetailedLogs: "查看日志",
@@ -110,6 +144,17 @@ const translations = {
     botControlHeading: "Feature switches and tuning", botControlBody: "Switches apply immediately; judge settings only affect proactive interest, never direct @Bot replies.",
     settingsSynced: "Settings synced", settingsUnsaved: "Unsaved changes", settingsSaving: "Saving", settingsSaveFailed: "Save failed",
     qqEnhancerFeature: "QQ enhancement", qqEnhancerFeatureHint: "Master switch for image context, natural expression and extended behavior.", webLookupFeature: "Web lookup", webLookupFeatureHint: "Lets the Bot use configured search services when needed.", proactiveFeature: "Proactive interest", proactiveFeatureHint: "Allows ordinary group, cold-group and private proactive candidates.", interestJudgeFeature: "Interest model judge", interestJudgeFeatureHint: "Uses the selected provider to decide whether joining in adds value.",
+    judgeProviderCodex: "Local Codex", judgeProviderOllama: "Local Ollama", botGroupChat: "Chat behavior", botGroupQuotaSaver: "Codex quota saver", botGroupIdleSwitch: "Automatic judge switching",
+    selfPersonaGenerationFeature: "Self-persona generation", selfPersonaGenerationHint: "Periodically rewrites the global persona; turn off for a fixed character card. Scope summaries still run.", replyScrubFeature: "Reply scrubbing", replyScrubHint: "Removes out-of-character and customer-service sentences before sending; leaves code, links and quotes alone.",
+    proactiveGroups: "Proactive groups", proactiveGroupsHint: "Comma separated; empty means every allowlisted group. Mentions and follow-ups are unaffected.", proactiveGroupsPlaceholder: "All allowlisted groups", engagedWindow: "Messages watched after @", engagedWindowHint: "Human messages watched after answering an @; needs proactive interest, 0 turns it off.", stickerMinChance: "Minimum sticker chance", stickerMinChanceHint: "Lowest chance a casual reply gets a sticker, 0–1.",
+    taskPleading: "Asks before doing tasks", taskPleadingHint: "Most asks the same person must make within 15 minutes; 0 or 1 turns it off.", sessionRotateHours: "Session rotation (hours)", sessionRotateHoursHint: "Older threads save a summary, then start fresh; 0 turns it off.", sessionRotateReplies: "Session rotation (replies)", sessionRotateRepliesHint: "Rotates at this many replies, or the hour limit if sooner; 0 turns it off.",
+    quotaSaverBelow: "Enter below remaining (%)", quotaSaverBelowHint: "Below this share of the 5-hour window, replies use the saver model at low effort in new threads; 0 turns it off.", quotaSaverResume: "Leave at remaining (%)", quotaSaverResumeHint: "Must be above the entry threshold; a window reset also leaves saver mode.", quotaSaverModel: "Saver model", quotaSaverModelHint: "Used the next time saver mode starts.",
+    idleSwitchFeature: "Switch provider when idle", idleSwitchHint: "macOS only: picks the provider by whether the owner is at the computer, and takes over the provider above.", idleAfter: "Idle threshold (seconds)", idleAfterHint: "Moves to the idle provider after this long, 60–86400.", idleActiveProvider: "Provider while in use", idleActiveProviderHint: "Used while the owner is at the computer, with its default model.", idleIdleProvider: "Provider when idle", idleIdleProviderHint: "Used while the computer is idle, with its default model.",
+    diagQuotaSaverActive: "Saver mode: active", diagQuotaSaverIdle: "Saver mode: standing by", diagQuotaSaverOff: "Saver mode: off", diagIdleSwitch: "Auto switch: {active} / {idle}", diagEngagedGroups: "Groups watched: {value}", diagGeminiReady: "Gemini: {value}", diagGeminiMissing: "Gemini key missing", diagOllama: "Ollama: {value}",
+    characterCard: "Character card", characterCardHint: "The Bot's identity and voice. Sent with every reply and used from the next reply on. Lore costs less context in the knowledge base.", characterCardPlaceholder: "# Character card", characterCardUpload: "Upload file", characterCardSave: "Save card", characterCardSaved: "Character card saved", characterCardCount: "{chars} / {max} characters", characterCardFile: "File: {value}", characterCardTooLong: "The card is over {max} characters; shorten it first", characterCardReplace: "Replace the editor's text with {value}? Nothing changes until you save.",
+    knowledgeTemplate: "Template", knowledgeExport: "Export backup", knowledgeImport: "Import", knowledgeExported: "Backup exported", knowledgeExportedPartial: "Backup exported, but {value} images were too large or unreadable and were left out", knowledgeImportTitle: "Import knowledge", knowledgeImportFile: "File", knowledgeImportDefaultKind: "Type for a single text file", knowledgeImportHint: "ZIP packages and .md or .txt files up to 32 MB. ZIP packages sort by notes.md and slang.md; the template's README shows the format.", knowledgeImportSelectAll: "Select all", knowledgeImportScope: "Apply to", knowledgeImportScopeKeep: "Keep the backup's scopes", knowledgeImportScopeGlobal: "Global (all groups and private chats)", knowledgeImportScopeGroups: "Chosen groups", knowledgeImportExtraGroups: "Other group numbers", knowledgeImportExtraGroupsHint: "Separate group numbers with commas", knowledgeImportConfirm: "Import selected",
+    knowledgeImportSummary: "{total} entries: {notes} knowledge, {slang} slang", knowledgeImportExists: "Exists", knowledgeImportImages: "{value} images", knowledgeImportTooLarge: "The file is over 32 MB", knowledgeImportNoGroups: "Choose at least one group", knowledgeImportNoneSelected: "Select at least one entry", knowledgeImportDone: "Imported: {created} new, {updated} updated, {unchanged} unchanged", knowledgeImportDoneImages: ", {images} images", knowledgeImportImagesFailed: ", {value} images could not be imported",
+    knowledgeImportWarnSplit: "\"{title}\" is long and became {parts} entries", knowledgeImportWarnCut: "\"{title}\" is long and its content was cut", knowledgeImportWarnTitleCut: "Long title was cut: {title}", knowledgeImportWarnSkipped: "Skipped unrecognized content: {title}", knowledgeImportWarnImage: "A picture for \"{title}\" is missing from the archive", scopeGlobalShort: "Global", scopeGroupShort: "Group {value}", scopeMemberShort: "Member {value}",
     judgeEveryMessages: "Message interval", judgeEveryMinutes: "Minute interval", judgeProvider: "Provider", judgeProviderCustom: "Custom compatible service", judgeModel: "Judge model", judgeTimeout: "Idle timeout (ms)", judgeRecentMessages: "Recent context", saveBotSettings: "Save Bot settings", botSettingsSaved: "Bot settings saved", waitingBotSettings: "Waiting for Bot settings",
     diagEngine: "Engine: {value}", diagJudgeProvider: "Judge: {value}", diagJudgeKeyReady: "Judge key configured", diagJudgeKeyMissing: "Judge key missing", diagSearchProvider: "Search: {value}", diagSafeFetch: "Safe downloads: {value}", safeFetchProxy: "proxy-compatible", safeFetchStrict: "strict", diagActiveGeneration: "Generating: {value}", diagPendingReplies: "Pending replies: {value}",
     selfPersona: "Global Bot persona", selfPersonaHint: "Generated from anonymous group and private summaries; the QQ nickname stays the name.", viewDetailedLogs: "View logs",
@@ -283,11 +328,42 @@ function normalizeBotSettingsDraft(value) {
     judgeEnabled: Boolean(value.judgeEnabled),
     judgeEveryMessages: boundedUiText(value.judgeEveryMessages, 8),
     judgeEveryMinutes: boundedUiText(value.judgeEveryMinutes, 8),
-    judgeProvider: ["openrouter", "deepseek", "custom"].includes(value.judgeProvider) ? value.judgeProvider : "openrouter",
+    judgeProvider: JUDGE_PROVIDER_IDS.includes(value.judgeProvider) ? value.judgeProvider : "openrouter",
     judgeModel: boundedUiText(value.judgeModel, 200),
     judgeTimeoutMs: boundedUiText(value.judgeTimeoutMs, 8),
-    judgeMaxRecentMessages: boundedUiText(value.judgeMaxRecentMessages, 8)
+    judgeMaxRecentMessages: boundedUiText(value.judgeMaxRecentMessages, 8),
+    proactiveGroupIds: boundedUiText(value.proactiveGroupIds, 4000),
+    ...Object.fromEntries(Object.keys(BOT_BEHAVIOR_TOGGLES).map((key) => [key, Boolean(value[key])])),
+    ...Object.fromEntries(Object.keys(BOT_BEHAVIOR_NUMBERS).map((key) => [key, boundedUiText(value[key], 8)])),
+    ...Object.fromEntries(Object.keys(BOT_BEHAVIOR_TEXTS).map((key) => [key, boundedUiText(value[key], 200)]))
   };
+}
+
+function readBotBehaviorControls(readNumber) {
+  return {
+    proactiveGroupIds: $("#botProactiveGroups").value,
+    ...Object.fromEntries(Object.entries(BOT_BEHAVIOR_TOGGLES).map(([key, selector]) => [key, $(selector).checked])),
+    ...Object.fromEntries(Object.entries(BOT_BEHAVIOR_NUMBERS).map(([key, selector]) => [key, readNumber($(selector).value)])),
+    ...Object.fromEntries(Object.entries(BOT_BEHAVIOR_TEXTS).map(([key, selector]) => [key, $(selector).value.trim()]))
+  };
+}
+
+function writeBotBehaviorControls(values) {
+  $("#botProactiveGroups").value = Array.isArray(values.proactiveGroupIds) ? values.proactiveGroupIds.join(", ") : values.proactiveGroupIds || "";
+  for (const [key, selector] of Object.entries(BOT_BEHAVIOR_TOGGLES)) $(selector).checked = values[key];
+  for (const [key, selector] of Object.entries(BOT_BEHAVIOR_NUMBERS)) $(selector).value = values[key];
+  for (const [key, selector] of Object.entries(BOT_BEHAVIOR_TEXTS)) $(selector).value = values[key];
+}
+
+// The idle switch owns the provider and its model while it is on.
+function syncBotProviderLock() {
+  const locked = $("#botIdleSwitchToggle").checked;
+  const busy = !app.state?.qq?.botSettings || app.busyKeys.has("bot-settings");
+  $("#botJudgeProvider").disabled = busy || locked;
+  $("#botJudgeModel").disabled = busy || locked;
+  $("#botIdleAfter").disabled = busy || !locked;
+  $("#botIdleActiveProvider").disabled = busy || !locked;
+  $("#botIdleIdleProvider").disabled = busy || !locked;
 }
 
 function collectBotSettingsDraft() {
@@ -301,7 +377,8 @@ function collectBotSettingsDraft() {
     judgeProvider: $("#botJudgeProvider").value,
     judgeModel: $("#botJudgeModel").value,
     judgeTimeoutMs: $("#botJudgeTimeout").value,
-    judgeMaxRecentMessages: $("#botJudgeRecent").value
+    judgeMaxRecentMessages: $("#botJudgeRecent").value,
+    ...readBotBehaviorControls((value) => value)
   };
 }
 
@@ -317,6 +394,7 @@ function applyBotSettingsDraft(draft) {
   $("#botJudgeModel").value = draft.judgeModel;
   $("#botJudgeTimeout").value = draft.judgeTimeoutMs;
   $("#botJudgeRecent").value = draft.judgeMaxRecentMessages;
+  writeBotBehaviorControls(draft);
 }
 
 function readLogFilters() {
@@ -621,6 +699,7 @@ async function refreshView({ quiet = false } = {}) {
   // The engine identity lives in maintenance, so every view keeps it fresh.
   tasks.push(refreshMaintenance({ quiet }));
   if (["memory", "knowledge"].includes(app.view)) tasks.push(refreshMemory({ quiet }));
+  if (app.view === "intelligence") tasks.push(refreshCharacterCard());
   if (app.view === "activity") tasks.push(refreshLogs({ quiet }));
   await Promise.allSettled(tasks);
 }
@@ -1062,13 +1141,25 @@ function renderBotControls() {
     $("#botJudgeModel").value = settings.judgeModel || "";
     $("#botJudgeTimeout").value = settings.judgeTimeoutMs;
     $("#botJudgeRecent").value = settings.judgeMaxRecentMessages;
+    writeBotBehaviorControls(settings);
   }
+  $("#botProactiveGroups").placeholder = t("proactiveGroupsPlaceholder");
+  // Locked controls are not submitted, so they always show the live provider.
+  if (settings.judgeIdleSwitchEnabled && $("#botIdleSwitchToggle").checked) {
+    $("#botJudgeProvider").value = settings.judgeProvider || "openrouter";
+    $("#botJudgeModel").value = settings.judgeModel || "";
+  }
+  syncBotProviderLock();
   if (dirty && !busy) setBotControlStatus("dirty", "settingsUnsaved");
   const activeGenerations = sumValues(app.state?.qq?.activeGenerationCounts);
   const pendingReplies = sumValues(app.state?.qq?.pendingReplyCounts);
   const provider = app.maintenance?.webLookup?.effectiveProvider || t("unknown");
   const safeFetchMode = app.state?.network?.safeFetchMode === "proxy-compatible" ? t("safeFetchProxy") : t("safeFetchStrict");
   const engine = getEngineInfo();
+  const runtime = app.state?.qq?.botRuntime || {};
+  const saverEnabled = Number(settings.quotaSaverBelow) > 0;
+  const usesOllama = settings.judgeProvider === "ollama"
+    || (settings.judgeIdleSwitchEnabled && [settings.judgeActiveProvider, settings.judgeIdleProvider].includes("ollama"));
   setHtml($("#botDiagnostics"), [
     [t("diagEngine", { value: engineSummary(engine) }), ""],
     [t("diagJudgeProvider", { value: settings.judgeProvider || "openrouter" }), ""],
@@ -1076,11 +1167,17 @@ function renderBotControls() {
     [t("diagSearchProvider", { value: provider }), settings.webLookupEnabled ? "" : "warn"],
     [t("diagSafeFetch", { value: safeFetchMode }), ""],
     [t("diagActiveGeneration", { value: activeGenerations }), activeGenerations ? "warn" : ""],
-    [t("diagPendingReplies", { value: pendingReplies }), pendingReplies ? "warn" : ""]
+    [t("diagPendingReplies", { value: pendingReplies }), pendingReplies ? "warn" : ""],
+    [t(runtime.quotaSaverActive ? "diagQuotaSaverActive" : saverEnabled ? "diagQuotaSaverIdle" : "diagQuotaSaverOff"), runtime.quotaSaverActive ? "warn" : ""],
+    ...(settings.judgeIdleSwitchEnabled ? [[t("diagIdleSwitch", { active: settings.judgeActiveProvider, idle: settings.judgeIdleProvider }), ""]] : []),
+    ...(Number(settings.engagedWindowMessages) > 0 ? [[t("diagEngagedGroups", { value: Number(runtime.engagedGroups) || 0 }), ""]] : []),
+    [runtime.geminiConfigured ? t("diagGeminiReady", { value: runtime.geminiModel || t("unknown") }) : t("diagGeminiMissing"), runtime.geminiConfigured ? "ok" : ""],
+    ...(usesOllama && runtime.ollamaBaseUrl ? [[t("diagOllama", { value: runtime.ollamaBaseUrl }), ""]] : [])
   ].map(([label, kind]) => `<span class="chip ${kind}">${escapeHtml(label)}</span>`).join(""));
 }
 
 function collectBotSettings() {
+  const idleSwitchOn = $("#botIdleSwitchToggle").checked;
   return {
     enhancerEnabled: $("#botEnhancerToggle").checked,
     webLookupEnabled: $("#botWebLookupToggle").checked,
@@ -1088,10 +1185,11 @@ function collectBotSettings() {
     judgeEnabled: $("#botJudgeToggle").checked,
     judgeEveryMessages: Number($("#botJudgeMessages").value),
     judgeEveryMinutes: Number($("#botJudgeMinutes").value),
-    judgeProvider: $("#botJudgeProvider").value,
-    judgeModel: $("#botJudgeModel").value.trim(),
+    // A form opened before an automatic switch must not undo that switch.
+    ...(idleSwitchOn ? {} : { judgeProvider: $("#botJudgeProvider").value, judgeModel: $("#botJudgeModel").value.trim() }),
     judgeTimeoutMs: Number($("#botJudgeTimeout").value),
-    judgeMaxRecentMessages: Number($("#botJudgeRecent").value)
+    judgeMaxRecentMessages: Number($("#botJudgeRecent").value),
+    ...readBotBehaviorControls(Number)
   };
 }
 
@@ -1130,6 +1228,7 @@ async function saveBotSettings(control) {
   } finally {
     app.busyKeys.delete("bot-settings");
     controls.forEach((item) => { item.disabled = !app.state?.qq?.botSettings; });
+    syncBotProviderLock();
   }
 }
 
@@ -1764,6 +1863,216 @@ function previewKnowledgeImageFile(file) {
   image.alt = file.name;
   image.src = URL.createObjectURL(file);
   preview.replaceChildren(image);
+}
+
+const KNOWLEDGE_IMPORT_MAX_BYTES = 32 * 1024 * 1024;
+const characterCard = { loaded: false, dirty: false, maxChars: 0, fileName: "" };
+let knowledgeImport = null;
+
+async function refreshCharacterCard() {
+  if (characterCard.dirty) return;
+  try {
+    const card = await api("/api/qq/character-card", {}, { key: "character-card" });
+    if (characterCard.dirty) return;
+    Object.assign(characterCard, { loaded: true, maxChars: card.maxChars, fileName: card.fileName });
+    $("#characterCardContent").value = card.content;
+    renderCharacterCard();
+  } catch (error) {
+    if (error.name !== "AbortError") setBotCardStatus("error", "settingsSaveFailed");
+  }
+}
+
+function setBotCardStatus(status, messageKey) {
+  const node = $("#characterCardStatus");
+  node.className = `save-state ${status === "ok" ? "" : status}`;
+  node.textContent = t(messageKey);
+}
+
+function renderCharacterCard() {
+  const chars = $("#characterCardContent").value.trim().length;
+  const over = characterCard.maxChars > 0 && chars > characterCard.maxChars;
+  const count = $("#characterCardCount");
+  count.textContent = t("characterCardCount", { chars, max: characterCard.maxChars || "-" });
+  count.classList.toggle("over-limit", over);
+  $("#characterCardFile").textContent = t("characterCardFile", { value: characterCard.fileName || "-" });
+  $("#saveCharacterCard").disabled = !characterCard.loaded || over;
+  setBotCardStatus(characterCard.dirty ? "dirty" : "ok", characterCard.dirty ? "settingsUnsaved" : "settingsSynced");
+}
+
+function markCharacterCardDirty() {
+  characterCard.dirty = true;
+  renderCharacterCard();
+}
+
+async function saveCharacterCard(control) {
+  setBotCardStatus("saving", "settingsSaving");
+  try {
+    const card = await mutate(() => api("/api/qq/character-card", {
+      method: "POST",
+      body: JSON.stringify({ content: $("#characterCardContent").value })
+    }), { control, success: t("characterCardSaved") });
+    characterCard.dirty = false;
+    Object.assign(characterCard, { loaded: true, maxChars: card.maxChars, fileName: card.fileName });
+    $("#characterCardContent").value = card.content;
+  } catch {
+    setBotCardStatus("error", "settingsSaveFailed");
+    return;
+  }
+  renderCharacterCard();
+}
+
+async function uploadCharacterCardFile(file) {
+  if (!file) return;
+  const text = await file.text();
+  if ($("#characterCardContent").value.trim() && !window.confirm(t("characterCardReplace", { value: file.name }))) return;
+  $("#characterCardContent").value = text;
+  markCharacterCardDirty();
+}
+
+async function downloadHubFile(path, fallbackName) {
+  const headers = new Headers();
+  if (app.apiToken) headers.set("authorization", `Bearer ${app.apiToken}`);
+  const response = await fetch(`${HUB}${path}`, { headers, credentials: "same-origin" });
+  if (!response.ok) throw new Error(`${t("requestFailed")} (${response.status})`);
+  const fileName = (response.headers.get("content-disposition") || "").match(/filename="([^"]+)"/)?.[1] || fallbackName;
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return response;
+}
+
+async function exportKnowledge(control, path, fallbackName, describe) {
+  control.disabled = true;
+  try {
+    const response = await downloadHubFile(path, fallbackName);
+    if (describe) {
+      const omitted = Number(response.headers.get("x-knowledge-omitted-images")) || 0;
+      showToast(t(omitted ? "knowledgeExportedPartial" : "knowledgeExported", { value: omitted }), omitted ? "warn" : "success");
+    }
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    control.disabled = false;
+  }
+}
+
+function openKnowledgeImport() {
+  knowledgeImport = null;
+  $("#knowledgeImportForm").reset();
+  $("#knowledgeImportReview").hidden = true;
+  $("#saveKnowledgeImport").disabled = true;
+  renderKnowledgeImportGroups();
+  syncKnowledgeImportScope();
+  $("#knowledgeImportDialog").showModal();
+}
+
+function renderKnowledgeImportGroups() {
+  setHtml($("#knowledgeImportGroups"), (app.state?.qq?.allowedGroups || []).map((id) => `<label class="chip checkbox-chip">
+    <input type="checkbox" value="${escapeHtml(id)}" data-import-group /><span>${escapeHtml(id)}</span>
+  </label>`).join(""));
+}
+
+function syncKnowledgeImportScope() {
+  const mode = $("#knowledgeImportForm").elements.knowledgeImportScope.value;
+  $("#knowledgeImportGroupPicker").hidden = mode !== "groups";
+}
+
+function describeKnowledgeImportScope(scope) {
+  if (!scope?.type) return "";
+  if (scope.type === "global") return t("scopeGlobalShort");
+  if (scope.type === "group") return t("scopeGroupShort", { value: scope.groupName || scope.groupId });
+  return t("scopeMemberShort", { value: scope.userName || scope.userId });
+}
+
+function describeKnowledgeImportWarning(warning) {
+  const key = { split: "knowledgeImportWarnSplit", content_cut: "knowledgeImportWarnCut", title_cut: "knowledgeImportWarnTitleCut", skipped: "knowledgeImportWarnSkipped", image_missing: "knowledgeImportWarnImage" }[warning.code];
+  return key ? t(key, { title: warning.title, parts: warning.parts }) : "";
+}
+
+function renderKnowledgeImportReview(preview) {
+  const notes = preview.items.filter((item) => item.kind === "note").length;
+  $("#knowledgeImportSummary").textContent = t("knowledgeImportSummary", { total: preview.items.length, notes, slang: preview.items.length - notes });
+  setHtml($("#knowledgeImportWarnings"), preview.warnings.slice(0, 20).map((warning) => `<span class="chip warn">${escapeHtml(describeKnowledgeImportWarning(warning))}</span>`).join(""));
+  setHtml($("#knowledgeImportList"), preview.items.map((item) => `<label class="knowledge-import-row">
+    <input type="checkbox" checked value="${item.index}" data-import-item />
+    <span class="knowledge-import-copy">
+      <span class="knowledge-import-title"><span class="chip">${escapeHtml(t(item.kind === "slang" ? "knowledgeKindSlang" : "knowledgeKindNote"))}</span><strong>${escapeHtml(item.title)}</strong>${item.exists ? `<span class="chip warn">${escapeHtml(t("knowledgeImportExists"))}</span>` : ""}${item.scope ? `<span class="chip">${escapeHtml(describeKnowledgeImportScope(item.scope))}</span>` : ""}${item.imageCount ? `<span class="chip">${escapeHtml(t("knowledgeImportImages", { value: item.imageCount }))}</span>` : ""}</span>
+      <small>${escapeHtml(item.content)}</small>
+    </span>
+  </label>`).join(""));
+  const isBackup = preview.format === "backup";
+  $("#knowledgeImportKeepOption").hidden = !isBackup;
+  $("#knowledgeImportForm").elements.knowledgeImportScope.value = isBackup ? "keep" : "global";
+  $("#knowledgeImportAll").checked = true;
+  syncKnowledgeImportScope();
+  $("#knowledgeImportReview").hidden = false;
+  $("#saveKnowledgeImport").disabled = false;
+}
+
+async function previewKnowledgeImport() {
+  const file = $("#knowledgeImportFile").files?.[0] || null;
+  knowledgeImport = null;
+  $("#knowledgeImportReview").hidden = true;
+  $("#saveKnowledgeImport").disabled = true;
+  if (!file) return;
+  if (file.size > KNOWLEDGE_IMPORT_MAX_BYTES) {
+    showToast(t("knowledgeImportTooLarge"), "error");
+    return;
+  }
+  try {
+    const data = (await readFileAsDataUrl(file)).split(",")[1] || "";
+    const request = { fileName: file.name, data, defaultKind: $("#knowledgeImportDefaultKind").value };
+    const preview = await api("/api/qq/knowledge/import", { method: "POST", body: JSON.stringify({ ...request, dryRun: true }) }, { key: "knowledge-import" });
+    knowledgeImport = { request, preview };
+    renderKnowledgeImportReview(preview);
+  } catch (error) {
+    if (error.name !== "AbortError") showToast(error.message, "error");
+  }
+}
+
+function collectKnowledgeImportScope() {
+  const mode = $("#knowledgeImportForm").elements.knowledgeImportScope.value;
+  if (mode !== "groups") return { mode };
+  const groupIds = [
+    ...$$("[data-import-group]:checked", $("#knowledgeImportGroups")).map((input) => input.value),
+    ...$("#knowledgeImportExtraGroups").value.split(/[\s,，]+/).filter(Boolean)
+  ];
+  return { mode, groupIds };
+}
+
+async function submitKnowledgeImport(control) {
+  if (!knowledgeImport) return;
+  const selected = $$("[data-import-item]:checked", $("#knowledgeImportList")).map((input) => Number(input.value));
+  if (!selected.length) {
+    showToast(t("knowledgeImportNoneSelected"), "error");
+    return;
+  }
+  const scope = collectKnowledgeImportScope();
+  if (scope.mode === "groups" && !scope.groupIds.length) {
+    showToast(t("knowledgeImportNoGroups"), "error");
+    return;
+  }
+  control.disabled = true;
+  try {
+    const response = await api("/api/qq/knowledge/import", { method: "POST", body: JSON.stringify({ ...knowledgeImport.request, selected, scope }) });
+    app.memory = response;
+    const { imported } = response;
+    let message = t("knowledgeImportDone", imported);
+    if (imported.images) message += t("knowledgeImportDoneImages", imported);
+    if (imported.imagesFailed) message += t("knowledgeImportImagesFailed", { value: imported.imagesFailed });
+    showToast(message, imported.imagesFailed ? "warn" : "success");
+    $("#knowledgeImportDialog").close();
+    renderKnowledge();
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    control.disabled = false;
+  }
 }
 
 function readFileAsDataUrl(file) {
@@ -2496,7 +2805,7 @@ $("#botSettingsForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   await saveBotSettings(event.submitter);
 });
-for (const selector of ["#botEnhancerToggle", "#botWebLookupToggle", "#botProactiveToggle", "#botJudgeToggle"]) {
+for (const selector of ["#botEnhancerToggle", "#botWebLookupToggle", "#botProactiveToggle", "#botJudgeToggle", ...Object.values(BOT_BEHAVIOR_TOGGLES)]) {
   $(selector).addEventListener("change", async (event) => {
     if (event.target === $("#botEnhancerToggle") && !event.target.checked) $("#botProactiveToggle").checked = false;
     if (event.target === $("#botProactiveToggle") && event.target.checked) $("#botEnhancerToggle").checked = true;
@@ -2543,6 +2852,33 @@ $$("[data-close-knowledge-editor]").forEach((button) => button.addEventListener(
 $("#knowledgeImageDialog").addEventListener("click", (event) => { if (event.target === event.currentTarget) event.currentTarget.close(); });
 $$("[data-close-knowledge-image]").forEach((button) => button.addEventListener("click", () => $("#knowledgeImageDialog").close()));
 $("#knowledgeImageFile").addEventListener("change", (event) => previewKnowledgeImageFile(event.target.files?.[0] || null));
+$("#characterCardContent").addEventListener("input", markCharacterCardDirty);
+$("#characterCardForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await saveCharacterCard(event.submitter);
+});
+$("#characterCardUploadButton").addEventListener("click", () => $("#characterCardUpload").click());
+$("#characterCardUpload").addEventListener("change", async (event) => {
+  await uploadCharacterCardFile(event.target.files?.[0] || null);
+  event.target.value = "";
+});
+$("#knowledgeTemplate").addEventListener("click", (event) => exportKnowledge(event.currentTarget, "/api/qq/knowledge/template", "knowledge-template.zip", false));
+$("#knowledgeExport").addEventListener("click", (event) => exportKnowledge(event.currentTarget, "/api/qq/knowledge/export", "knowledge-backup.zip", true));
+$("#knowledgeImport").addEventListener("click", openKnowledgeImport);
+$("#knowledgeImportFile").addEventListener("change", previewKnowledgeImport);
+$("#knowledgeImportDefaultKind").addEventListener("change", previewKnowledgeImport);
+$("#knowledgeImportAll").addEventListener("change", (event) => {
+  $$("[data-import-item]", $("#knowledgeImportList")).forEach((input) => { input.checked = event.target.checked; });
+});
+$("#knowledgeImportForm").addEventListener("change", (event) => {
+  if (event.target.name === "knowledgeImportScope") syncKnowledgeImportScope();
+});
+$("#knowledgeImportForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await submitKnowledgeImport(event.submitter);
+});
+$("#knowledgeImportDialog").addEventListener("click", (event) => { if (event.target === event.currentTarget) event.currentTarget.close(); });
+$$("[data-close-knowledge-import]").forEach((button) => button.addEventListener("click", () => $("#knowledgeImportDialog").close()));
 $("#knowledgeImageForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   await submitKnowledgeImage(event.submitter);

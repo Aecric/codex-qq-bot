@@ -228,12 +228,49 @@
                   </label>
                 </div>
                 <div class="tuning-grid">
-                  <label class="field"><span data-i18n="judgeProvider">模型服务</span><select id="botJudgeProvider"><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="custom" data-i18n="judgeProviderCustom">自定义兼容服务</option></select></label>
+                  <label class="field"><span data-i18n="judgeProvider">模型服务</span><select id="botJudgeProvider"><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="custom" data-i18n="judgeProviderCustom">自定义兼容服务</option><option value="codex" data-i18n="judgeProviderCodex">本机 Codex</option><option value="ollama" data-i18n="judgeProviderOllama">本机 Ollama</option></select></label>
                   <label class="field"><span data-i18n="judgeModel">判定模型</span><input id="botJudgeModel" autocomplete="off" spellcheck="false" /></label>
                   <label class="field"><span data-i18n="judgeTimeout">静默超时（ms）</span><input id="botJudgeTimeout" type="number" min="1500" max="20000" step="100" /></label>
                   <label class="field"><span data-i18n="judgeEveryMessages">消息间隔</span><input id="botJudgeMessages" type="number" min="1" max="1000" step="1" /></label>
                   <label class="field"><span data-i18n="judgeEveryMinutes">分钟间隔</span><input id="botJudgeMinutes" type="number" min="0" max="1440" step="1" /></label>
                   <label class="field"><span data-i18n="judgeRecentMessages">最近上下文</span><input id="botJudgeRecent" type="number" min="1" max="12" step="1" /></label>
+                </div>
+                <h3 class="bot-group-title" data-i18n="botGroupChat">聊天行为</h3>
+                <div class="toggle-grid">
+                  <label class="toggle-card">
+                    <span><strong data-i18n="selfPersonaGenerationFeature">自我人格生成</strong><small data-i18n="selfPersonaGenerationHint">定期重写全局人设；用固定角色卡时可关闭，范围摘要照常运行。</small></span>
+                    <span class="switch"><input id="botPersonaGenerationToggle" type="checkbox" /><span aria-hidden="true"></span></span>
+                  </label>
+                  <label class="toggle-card">
+                    <span><strong data-i18n="replyScrubFeature">回复清理</strong><small data-i18n="replyScrubHint">发送前删去跳出角色和客服腔的句子，不动代码、链接和引号内容。</small></span>
+                    <span class="switch"><input id="botReplyScrubToggle" type="checkbox" /><span aria-hidden="true"></span></span>
+                  </label>
+                </div>
+                <div class="tuning-grid">
+                  <label class="field"><span data-i18n="proactiveGroups">主动接话群</span><input id="botProactiveGroups" autocomplete="off" spellcheck="false" inputmode="numeric" /><small class="field-hint" data-i18n="proactiveGroupsHint">逗号分隔；留空表示所有白名单群。@ 和续聊不受影响。</small></label>
+                  <label class="field"><span data-i18n="engagedWindow">@ 后观察条数</span><input id="botEngagedWindow" type="number" min="0" max="200" step="1" /><small class="field-hint" data-i18n="engagedWindowHint">回答 @ 后继续观察的真人消息数；需开启主动兴趣，0 关闭。</small></label>
+                  <label class="field"><span data-i18n="stickerMinChance">表情包最低概率</span><input id="botStickerChance" type="number" min="0" max="1" step="0.05" /><small class="field-hint" data-i18n="stickerMinChanceHint">闲聊回复配表情包的最低概率，0–1。</small></label>
+                  <label class="field"><span data-i18n="taskPleading">求几次才干活</span><input id="botTaskPleading" type="number" min="0" max="10" step="1" /><small class="field-hint" data-i18n="taskPleadingHint">同一人 15 分钟内最多要求几次才执行任务；0 或 1 关闭。</small></label>
+                  <label class="field"><span data-i18n="sessionRotateHours">会话轮换（小时）</span><input id="botRotateHours" type="number" min="0" max="168" step="0.5" /><small class="field-hint" data-i18n="sessionRotateHoursHint">线程超过这么久后先总结记忆再换新线程；0 关闭。</small></label>
+                  <label class="field"><span data-i18n="sessionRotateReplies">会话轮换（回复数）</span><input id="botRotateReplies" type="number" min="0" max="1000" step="1" /><small class="field-hint" data-i18n="sessionRotateRepliesHint">线程累计回复达到后轮换，与小时数先到者为准；0 关闭。</small></label>
+                </div>
+                <h3 class="bot-group-title" data-i18n="botGroupQuotaSaver">Codex 额度省电</h3>
+                <div class="tuning-grid">
+                  <label class="field"><span data-i18n="quotaSaverBelow">低于此剩余进入（%）</span><input id="botSaverBelow" type="number" min="0" max="90" step="1" /><small class="field-hint" data-i18n="quotaSaverBelowHint">5 小时窗口剩余低于它时改用省电模型和 low 思考，并换新线程；0 关闭。</small></label>
+                  <label class="field"><span data-i18n="quotaSaverResume">回到此剩余退出（%）</span><input id="botSaverResume" type="number" min="1" max="100" step="1" /><small class="field-hint" data-i18n="quotaSaverResumeHint">必须大于进入阈值；窗口重置时也会退出。</small></label>
+                  <label class="field"><span data-i18n="quotaSaverModel">省电模型</span><input id="botSaverModel" autocomplete="off" spellcheck="false" /><small class="field-hint" data-i18n="quotaSaverModelHint">下次进入省电模式时使用。</small></label>
+                </div>
+                <h3 class="bot-group-title" data-i18n="botGroupIdleSwitch">兴趣模型自动切换</h3>
+                <div class="toggle-grid">
+                  <label class="toggle-card">
+                    <span><strong data-i18n="idleSwitchFeature">按闲置切换服务</strong><small data-i18n="idleSwitchHint">仅 macOS：按主人是否在用电脑选择服务；开启后上方的模型服务由它接管。</small></span>
+                    <span class="switch"><input id="botIdleSwitchToggle" type="checkbox" /><span aria-hidden="true"></span></span>
+                  </label>
+                </div>
+                <div class="tuning-grid">
+                  <label class="field"><span data-i18n="idleAfter">闲置阈值（秒）</span><input id="botIdleAfter" type="number" min="60" max="86400" step="10" /><small class="field-hint" data-i18n="idleAfterHint">闲置这么久后切到闲置服务，60–86400。</small></label>
+                  <label class="field"><span data-i18n="idleActiveProvider">使用中服务</span><select id="botIdleActiveProvider"><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="custom" data-i18n="judgeProviderCustom">自定义兼容服务</option><option value="codex" data-i18n="judgeProviderCodex">本机 Codex</option><option value="ollama" data-i18n="judgeProviderOllama">本机 Ollama</option></select><small class="field-hint" data-i18n="idleActiveProviderHint">主人在用电脑时使用，取该服务默认模型。</small></label>
+                  <label class="field"><span data-i18n="idleIdleProvider">闲置时服务</span><select id="botIdleIdleProvider"><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="custom" data-i18n="judgeProviderCustom">自定义兼容服务</option><option value="codex" data-i18n="judgeProviderCodex">本机 Codex</option><option value="ollama" data-i18n="judgeProviderOllama">本机 Ollama</option></select><small class="field-hint" data-i18n="idleIdleProviderHint">电脑闲置时使用，取该服务默认模型。</small></label>
                 </div>
                 <div class="form-actions"><button id="saveBotSettings" class="button primary" type="submit" data-i18n="saveBotSettings">保存 Bot 设置</button></div>
               </form>
@@ -241,6 +278,23 @@
 
             <div class="grid behavior-grid">
               <div class="behavior-column behavior-column-main">
+                <section class="card">
+                  <header class="card-head">
+                    <div><h2 data-i18n="characterCard">角色卡</h2><p data-i18n="characterCardHint">Bot 的身份和说话方式，每次回复都会带上，下一条回复起生效。世界观等资料放到知识库更省上下文。</p></div>
+                    <span id="characterCardStatus" class="save-state" data-i18n="settingsSynced">设置已同步</span>
+                  </header>
+                  <form id="characterCardForm" class="stack">
+                    <textarea id="characterCardContent" rows="12" spellcheck="false" aria-labelledby="characterCardFile" placeholder="# 角色卡" data-i18n-placeholder="characterCardPlaceholder"></textarea>
+                    <div class="character-card-foot">
+                      <span class="field-hint"><span id="characterCardCount"></span> · <span id="characterCardFile"></span></span>
+                      <div class="character-card-actions">
+                        <input id="characterCardUpload" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden />
+                        <button id="characterCardUploadButton" class="button ghost small" type="button" data-i18n="characterCardUpload">上传文件</button>
+                        <button id="saveCharacterCard" class="button primary small" type="submit" data-i18n="characterCardSave">保存角色卡</button>
+                      </div>
+                    </div>
+                  </form>
+                </section>
                 <section class="card">
                   <header class="card-head">
                     <div><h2 data-i18n="selfPersona">Bot 全局人设</h2><p data-i18n="selfPersonaHint">从各群和私聊的匿名摘要生成；QQ 昵称固定作为名字。</p></div>
@@ -327,6 +381,9 @@
                   <option value="frequency" data-i18n="knowledgeSortFrequency">出现频率</option>
                   <option value="title" data-i18n="knowledgeSortTitle">标题</option>
                 </select>
+                <button id="knowledgeTemplate" class="button ghost" type="button" data-i18n="knowledgeTemplate">下载模板</button>
+                <button id="knowledgeExport" class="button ghost" type="button" data-i18n="knowledgeExport">导出备份</button>
+                <button id="knowledgeImport" class="button ghost" type="button" data-i18n="knowledgeImport">导入</button>
                 <button id="newKnowledge" class="button primary" type="button" data-new-knowledge data-i18n="newKnowledge">新建知识</button>
               </div>
               <div id="knowledgeWorkspace" class="knowledge-workspace">
@@ -476,6 +533,36 @@
           <label class="field knowledge-member-field" hidden><span data-i18n="knowledgeUserName">成员名称</span><input id="knowledgeUserName" maxlength="100" /></label>
         </div>
         <div class="modal-actions"><button class="button ghost" type="button" data-close-knowledge-editor data-i18n="cancel">取消</button><button id="saveKnowledge" class="button primary" type="submit" data-i18n="saveKnowledge">保存知识</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="knowledgeImportDialog" class="modal wide" aria-labelledby="knowledgeImportTitle">
+      <form id="knowledgeImportForm" class="modal-body">
+        <header class="modal-head"><h2 id="knowledgeImportTitle" data-i18n="knowledgeImportTitle">导入知识库</h2><button class="icon-button" type="button" data-close-knowledge-import aria-label="关闭" data-i18n-aria-label="close">×</button></header>
+        <div class="form-grid">
+          <label class="field"><span data-i18n="knowledgeImportFile">文件</span><input id="knowledgeImportFile" type="file" accept=".zip,.md,.markdown,.txt,application/zip,text/markdown,text/plain" required /></label>
+          <label class="field"><span data-i18n="knowledgeImportDefaultKind">单个文本文件的类型</span><select id="knowledgeImportDefaultKind"><option value="note" data-i18n="knowledgeKindNote">知识</option><option value="slang" data-i18n="knowledgeKindSlang">黑话</option></select></label>
+        </div>
+        <p class="field-note" data-i18n="knowledgeImportHint">支持 ZIP 包和 .md、.txt 文件，不超过 32 MB。ZIP 包按 notes.md、slang.md 分类，写法见模板里的 README。</p>
+        <div id="knowledgeImportReview" class="stack" hidden>
+          <div class="knowledge-import-head">
+            <strong id="knowledgeImportSummary"></strong>
+            <label class="checkbox-line"><input id="knowledgeImportAll" type="checkbox" checked /><span data-i18n="knowledgeImportSelectAll">全选</span></label>
+          </div>
+          <div id="knowledgeImportWarnings" class="chip-row"></div>
+          <div id="knowledgeImportList" class="knowledge-import-list"></div>
+          <fieldset class="knowledge-import-scope">
+            <legend data-i18n="knowledgeImportScope">应用到</legend>
+            <label id="knowledgeImportKeepOption" class="checkbox-line" hidden><input type="radio" name="knowledgeImportScope" value="keep" /><span data-i18n="knowledgeImportScopeKeep">保留备份里的范围</span></label>
+            <label class="checkbox-line"><input type="radio" name="knowledgeImportScope" value="global" checked /><span data-i18n="knowledgeImportScopeGlobal">全局（所有群和私聊）</span></label>
+            <label class="checkbox-line"><input type="radio" name="knowledgeImportScope" value="groups" /><span data-i18n="knowledgeImportScopeGroups">指定的群</span></label>
+            <div id="knowledgeImportGroupPicker" class="stack" hidden>
+              <div id="knowledgeImportGroups" class="chip-row"></div>
+              <label class="field"><span data-i18n="knowledgeImportExtraGroups">其他群号</span><input id="knowledgeImportExtraGroups" autocomplete="off" inputmode="numeric" placeholder="多个群号用逗号分隔" data-i18n-placeholder="knowledgeImportExtraGroupsHint" /></label>
+            </div>
+          </fieldset>
+        </div>
+        <div class="modal-actions"><button class="button ghost" type="button" data-close-knowledge-import data-i18n="cancel">取消</button><button id="saveKnowledgeImport" class="button primary" type="submit" disabled data-i18n="knowledgeImportConfirm">导入所选</button></div>
       </form>
     </dialog>
 
