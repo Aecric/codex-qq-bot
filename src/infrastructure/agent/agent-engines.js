@@ -13,6 +13,8 @@ const engines = Object.freeze({
     name: "Codex",
     logLabel: "Codex app-server",
     runtime: "codex-app-server-native",
+    transport: "cli",
+    keyName: null,
     // The ChatGPT account feeds a usage window, and QQ /模型 switches models
     // from the Codex catalog.
     reportsQuota: true,
@@ -25,10 +27,37 @@ const engines = Object.freeze({
     name: "Claude Code",
     logLabel: "Claude Code",
     runtime: "claude-code-stream-json",
+    transport: "cli",
+    keyName: null,
     reportsQuota: false,
     modelCatalog: false,
     selectModel: ({ claudeModel } = {}) => claudeModel || null,
     selectReasoningEffort: ({ ai, claudeReasoningEffort } = {}) => claudeReasoningEffort || ai?.reasoningEffort || null
+  }),
+  // Reached over an OpenAI-compatible API instead of a local CLI.
+  deepseek: Object.freeze({
+    id: "deepseek",
+    name: "DeepSeek",
+    logLabel: "DeepSeek API",
+    runtime: "chat-completions-api",
+    transport: "api",
+    keyName: "DEEPSEEK_API_KEY",
+    reportsQuota: false,
+    modelCatalog: false,
+    selectModel: ({ deepseekModel } = {}) => deepseekModel || null,
+    selectReasoningEffort: ({ ai } = {}) => ai?.reasoningEffort || null
+  }),
+  gemini: Object.freeze({
+    id: "gemini",
+    name: "Gemini",
+    logLabel: "Gemini API",
+    runtime: "chat-completions-api",
+    transport: "api",
+    keyName: "GEMINI_API_KEY",
+    reportsQuota: false,
+    modelCatalog: false,
+    selectModel: ({ geminiAgentModel } = {}) => geminiAgentModel || null,
+    selectReasoningEffort: ({ ai } = {}) => ai?.reasoningEffort || null
   })
 });
 
@@ -44,13 +73,15 @@ export function getAgentEngine(id) {
 }
 
 // What the active engine is running with right now; settings are
-// { ai, claudeModel, claudeReasoningEffort }.
+// { ai, claudeModel, claudeReasoningEffort, deepseekModel, geminiAgentModel }.
 export function describeAgentEngine(id, settings = {}) {
   const engine = getAgentEngine(id);
   return {
     engine: engine.id,
     name: engine.name,
     runtime: engine.runtime,
+    transport: engine.transport,
+    keyName: engine.keyName,
     model: engine.selectModel(settings),
     reasoningEffort: engine.selectReasoningEffort(settings),
     reportsQuota: engine.reportsQuota,

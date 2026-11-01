@@ -476,7 +476,7 @@ Common machine-controller intent:
 | Logs | `ncc logs` or `ncc logs --compact` |
 | One engine's agent logs | `ncc logs --category agent --engine claude` |
 | Stop Hub | `ncc stop-hub` |
-| Show or set the AI engine | `ncc engine` / `ncc engine claude` / `ncc engine codex` |
+| Show or set the AI engine | `ncc engine` / `ncc engine claude` / `ncc engine codex` / `ncc engine deepseek` / `ncc engine gemini`; the dashboard Settings page can also switch, save API keys and restart |
 | Claude Code path, login, model, profile | `ncc claude-status` |
 
 Start/recovery sequence:

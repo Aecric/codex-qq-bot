@@ -381,6 +381,13 @@ import {
 import { createQqNativeProgressReporter } from "./infrastructure/codex/qq-native-progress.js";
 import { createQqCodexTurnRunner, resolveQqAgentToolTransport } from "./infrastructure/codex/qq-turn-runner.js";
 import { detectClaudeConnection, isExecutableOnPath } from "./infrastructure/claude/claude-child-env.js";
+import { describeChatApiHost } from "./infrastructure/chat-api/chat-api-turn.js";
+import {
+  AgentEngineSettingsError,
+  launchHubRestartHelper,
+  readAgentEngineSettings,
+  saveAgentEngineSettings
+} from "./app/agent-engine-settings.js";
 import {
   AGENT_LOG_CATEGORY,
   describeAgentEngine,
@@ -557,6 +564,9 @@ const {
   claudeCliPath,
   claudeModel,
   claudeReasoningEffort,
+  deepseekModel,
+  geminiAgentModel,
+  geminiBaseUrl,
   codexCliPath,
   codexModel,
   codexReasoningEffort,
@@ -959,6 +969,13 @@ const qqAdaptiveLearningSnapshotLoggedGroups = new Set();
 const qqLanguageStatisticsLogSignatures = new Map();
 const stoppedQqGenerationIds = new Set();
 const activeCodexChildren = new Set();
+const localEnvFilePath = join(projectDir, "config", "local.env");
+const HUB_LAUNCHD_LABEL = "local.gpt-qq-bot.chat-hub";
+let hubRestartRequested = false;
+const qqChatApiConnections = Object.freeze({
+  deepseek: Object.freeze({ apiKey: environmentConfig.deepSeekApiKey, baseUrl: environmentConfig.deepSeekBaseUrl }),
+  gemini: Object.freeze({ apiKey: environmentConfig.geminiApiKey, baseUrl: geminiBaseUrl })
+});
 const backgroundTasks = new Set();
 const shutdownController = new AbortController();
 const qqReplyScheduler = createScopedReplyScheduler();
@@ -3529,7 +3546,7 @@ function normalizeMemoryEntries(entries, limit) {
 }
 
 function describeActiveAgent() {
-  return describeAgentEngine(agentEngine, { ai: state.ai, claudeModel, claudeReasoningEffort });
+  return describeAgentEngine(agentEngine, { ai: state.ai, claudeModel, claudeReasoningEffort, deepseekModel, geminiAgentModel });
 }
 
 const agentCliVersionProbe = createAgentCliVersionProbe();
@@ -3537,8 +3554,9 @@ const agentCliVersionProbe = createAgentCliVersionProbe();
 async function buildMaintenanceStatus({ force = false } = {}) {
   const activeAgent = describeActiveAgent();
   const usesClaude = activeAgent.engine === "claude";
+  const usesChatApi = activeAgent.transport === "api";
   const agentCliPath = usesClaude ? claudeCliPath : codexCliPath;
-  if (force) void agentCliVersionProbe.refresh(agentCliPath);
+  if (force && !usesChatApi) void agentCliVersionProbe.refresh(agentCliPath);
   const [codexPathOk, claudePathOk, claudeConnection, quota] = await Promise.all([
     access(codexCliPath).then(() => true).catch(() => false),
     usesClaude ? isExecutableOnPath(claudeCliPath) : null,
@@ -3563,9 +3581,12 @@ async function buildMaintenanceStatus({ force = false } = {}) {
     },
     agent: {
       ...activeAgent,
-      cliPathExists: usesClaude ? claudePathOk : codexPathOk,
-      cliVersion: agentCliVersionProbe.peek(agentCliPath),
-      connection: claudeConnection,
+      // API engines have no CLI to find; the dashboard checks their key instead.
+      cliPathExists: usesChatApi ? null : usesClaude ? claudePathOk : codexPathOk,
+      cliVersion: usesChatApi ? null : agentCliVersionProbe.peek(agentCliPath),
+      connection: usesChatApi ? "api" : claudeConnection,
+      apiKeyConfigured: usesChatApi ? Boolean(qqChatApiConnections[activeAgent.engine].apiKey) : null,
+      apiHost: usesChatApi ? describeChatApiHost(qqChatApiConnections[activeAgent.engine].baseUrl) : null,
       ...agentRun,
       queue
     },
@@ -6639,7 +6660,10 @@ function buildQqModelCatalogUnavailableReply() {
       title: "模型",
       fields: [["AI 引擎", formatAgentEngineSummary(activeAgent)]],
       notes: [`${activeAgent.name} 的模型在启动配置里设置，改完重启 Hub 生效；/模型 只用于切换 Codex 模型。`],
-      hints: ["配置项：CODEX_REMOTE_CONTACT_CLAUDE_MODEL / CODEX_REMOTE_CONTACT_CLAUDE_EFFORT"]
+      hints: [{
+        deepseek: "配置项：CODEX_REMOTE_CONTACT_DEEPSEEK_MODEL",
+        gemini: "配置项：CODEX_REMOTE_CONTACT_GEMINI_AGENT_MODEL"
+      }[activeAgent.engine] || "配置项：CODEX_REMOTE_CONTACT_CLAUDE_MODEL / CODEX_REMOTE_CONTACT_CLAUDE_EFFORT"]
     })
   };
 }
@@ -13255,6 +13279,10 @@ const runSteerableQqCodexTurn = createQqCodexTurnRunner({
   claudePath: claudeCliPath,
   claudeModel,
   claudeReasoningEffort,
+  deepseekModel,
+  geminiAgentModel,
+  chatApiConnections: qqChatApiConnections,
+  webSearch: (query) => searchWeb(query),
   toolTransport: agentToolTransport,
   leanContext: agentLeanContext,
   activeChildren: activeCodexChildren,
@@ -14618,6 +14646,57 @@ async function handleApi(req, res) {
     alternativeHeaders: ["x-codex-api-token"]
   })) {
     return sendJson(res, 401, { error: "API authentication required" });
+  }
+
+  if (req.method === "GET" && req.url === "/api/agent-engine") {
+    return sendJson(res, 200, await readAgentEngineSettings({
+      envFilePath: localEnvFilePath,
+      running: environmentConfig,
+      ai: state.ai,
+      canEdit: trustedLoopbackRequest
+    }));
+  }
+
+  if (req.method === "POST" && req.url === "/api/agent-engine") {
+    if (!trustedLoopbackRequest) {
+      return sendJson(res, 403, { error: "The AI engine can only be changed from this computer" });
+    }
+    const body = await readBody(req, { requireJson: true });
+    let engine;
+    try {
+      engine = await saveAgentEngineSettings({ envFilePath: localEnvFilePath, body });
+    } catch (error) {
+      if (error instanceof AgentEngineSettingsError) return sendJson(res, 400, { error: error.message });
+      throw error;
+    }
+    logger.info("Agent engine settings saved", { engine, keyChanged: Boolean(body.apiKey) }, "system");
+    return sendJson(res, 200, await readAgentEngineSettings({
+      envFilePath: localEnvFilePath,
+      running: environmentConfig,
+      ai: state.ai,
+      canEdit: true
+    }));
+  }
+
+  if (req.method === "POST" && req.url === "/api/agent-engine/restart") {
+    if (!trustedLoopbackRequest) {
+      return sendJson(res, 403, { error: "The Hub can only be restarted from this computer" });
+    }
+    if (hubRestartRequested) return sendJson(res, 202, { ok: true, restarting: true });
+    hubRestartRequested = true;
+    const launchdLabel = process.env.XPC_SERVICE_NAME === HUB_LAUNCHD_LABEL ? HUB_LAUNCHD_LABEL : "";
+    launchHubRestartHelper({
+      scriptPath: join(projectDir, "scripts", "restart-hub.sh"),
+      cwd: projectDir,
+      qqEnabled: state.channels.qq,
+      port: hubPort,
+      launchdLabel
+    });
+    logger.info("Hub restart requested from the dashboard", { launchd: Boolean(launchdLabel) }, "system");
+    sendJson(res, 202, { ok: true, restarting: true });
+    // launchd stops the job itself; otherwise the helper waits for this exit.
+    if (!launchdLabel) setTimeout(() => process.kill(process.pid, "SIGTERM"), 200);
+    return undefined;
   }
 
   if (req.method === "GET" && req.url === "/api/network/access-token") {

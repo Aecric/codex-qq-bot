@@ -122,6 +122,7 @@
                 </header>
                 <dl id="engineFacts" class="fact-grid"></dl>
                 <div id="engineLastRun" class="last-run"></div>
+                <p id="engineHint" class="engine-hint muted small-text"></p>
                 <div id="quotaSection" class="quota-section">
                   <div class="subhead"><h3 data-i18n="usageWindow">Codex 用量</h3><span id="quotaUpdated" class="muted small-text">—</span></div>
                   <div id="quotaOverview" class="quota-list"></div>
@@ -400,7 +401,7 @@
               <form id="logFilterForm" class="filter-grid">
                 <label class="field"><span data-i18n="level">级别</span><select id="logLevel"><option value="" data-i18n="allLevels">全部级别</option><option value="error">Error</option><option value="warn">Warn</option><option value="success">Success</option><option value="info">Info</option><option value="debug">Debug</option></select></label>
                 <label class="field"><span data-i18n="category">模块</span><select id="logCategory"><option value="" data-i18n="allCategories">全部模块</option></select></label>
-                <label class="field"><span data-i18n="engineFilter">AI 引擎</span><select id="logEngine"><option value="" data-i18n="allEngines">全部引擎</option><option value="codex">Codex</option><option value="claude">Claude Code</option></select></label>
+                <label class="field"><span data-i18n="engineFilter">AI 引擎</span><select id="logEngine"><option value="" data-i18n="allEngines">全部引擎</option><option value="codex">Codex</option><option value="claude">Claude Code</option><option value="deepseek">DeepSeek</option><option value="gemini">Gemini</option></select></label>
                 <label class="field wide"><span data-i18n="search">搜索</span><input id="logQuery" type="search" placeholder="消息、Trace、群或发送者" data-i18n-placeholder="logSearchHint" /></label>
                 <label class="field"><span data-i18n="slowThreshold">慢请求</span><select id="logSlow"><option value="" data-i18n="noLimit">不限</option><option value="500">≥ 500 ms</option><option value="1000">≥ 1 s</option><option value="3000">≥ 3 s</option><option value="10000">≥ 10 s</option></select></label>
                 <label class="field"><span data-i18n="visibleLogCount">显示条数</span><select id="logLimit"><option value="100">100</option><option value="250" selected>250</option><option value="500">500</option><option value="1000">1000</option></select></label>
@@ -431,6 +432,19 @@
           <!-- Settings -->
           <section class="view" id="view-settings" data-view-panel="settings" hidden>
             <div class="grid settings-grid">
+              <section class="card engine-settings-card">
+                <div class="setting-copy"><h2 data-i18n="engineSettings">AI 引擎</h2><p id="engineSettingsStatus" aria-live="polite">—</p></div>
+                <form id="engineSettingsForm" class="form-grid" novalidate>
+                  <label class="field"><span data-i18n="engineSelect">主模型引擎</span><select id="engineSelect"></select></label>
+                  <label id="engineModelField" class="field"><span data-i18n="engineModel">模型</span><input id="engineModelInput" autocomplete="off" spellcheck="false" maxlength="128" /></label>
+                  <label id="engineApiKeyField" class="field"><span data-i18n="engineApiKey">API Key</span><input id="engineApiKeyInput" type="password" autocomplete="new-password" spellcheck="false" maxlength="512" /><small id="engineApiKeyHint" class="field-hint"></small></label>
+                  <label id="engineBaseUrlField" class="field"><span data-i18n="engineBaseUrl">接口地址</span><input id="engineBaseUrlInput" type="url" autocomplete="off" spellcheck="false" /><small class="field-hint" data-i18n="engineBaseUrlHint">可换成中转地址；留空恢复默认。</small></label>
+                  <div class="form-actions span-2">
+                    <button id="restartHub" class="button ghost" type="button" data-i18n="restartHub" hidden>重启 Hub</button>
+                    <button id="saveEngineSettings" class="button primary" type="submit" data-i18n="saveEngineSettings">保存引擎设置</button>
+                  </div>
+                </form>
+              </section>
               <section class="card setting-row">
                 <div class="setting-copy"><h2 data-i18n="appearance">外观</h2><p data-i18n="appearanceHint">跟随系统，或固定使用浅色 / 深色。</p></div>
                 <div id="themeOptions" class="segmented" role="radiogroup" aria-label="主题" data-i18n-aria-label="theme">
@@ -479,7 +493,7 @@
               </section>
             </div>
             <section class="card about-card">
-              <header class="card-head"><div><h2>Codex QQ Bot</h2><p data-i18n="aboutBody">把 QQ 接到本机 Codex 或 Claude Code 的本地中枢。</p></div></header>
+              <header class="card-head"><div><h2>Codex QQ Bot</h2><p data-i18n="aboutBody">把 QQ 接到本机 Codex、Claude Code，或 DeepSeek、Gemini API 的本地中枢。</p></div></header>
               <dl id="runtimeFacts" class="fact-grid"></dl>
             </section>
           </section>

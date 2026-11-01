@@ -1,7 +1,7 @@
 const HUB = location.protocol === "http:" || location.protocol === "https:" ? "" : "http://127.0.0.1:3789";
 const STORAGE_PREFIX = "codexRemoteContact.";
 const validViews = new Set(["overview", "channels", "intelligence", "memory", "knowledge", "activity", "settings"]);
-const engineNames = { codex: "Codex", claude: "Claude Code" };
+const engineNames = { codex: "Codex", claude: "Claude Code", deepseek: "DeepSeek", gemini: "Gemini" };
 
 const JUDGE_PROVIDER_IDS = ["openrouter", "deepseek", "custom", "codex", "ollama"];
 // Behavior controls that share one treatment: setting key -> form control id.
@@ -43,9 +43,9 @@ const translations = {
     stateOk: "正常", stateBusy: "运行中", stateBad: "异常", stateOff: "未启用", statePending: "检查中",
     hubDetail: "本地接口 {endpoint}", oneBotDetail: "{name} · QQ {id}", oneBotDown: "无法连接 OneBot：{error}", qqEnabledDetail: "{groups} 个白名单群 · {events} 条最近事件", qqDisabledDetail: "QQ 通道已关闭", qqBusyDetail: "生成中 {active} · 待回复 {pending}",
     webDetail: "{provider}", webLastQuery: "{provider} · 最近查询：{query}", webDisabled: "联网查询已关闭",
-    agentDetail: "{model} · 思考强度 {effort}", agentPathMissing: "找不到 {engine} 命令",
+    agentDetail: "{model} · 思考强度 {effort}", agentPathMissing: "找不到 {engine} 命令", agentKeyMissing: "没有配置 {key}",
     engineModel: "模型", engineEffort: "思考强度", engineVersion: "CLI 版本", engineConnection: "连接方式", engineQueue: "任务队列", engineSessions: "长期会话",
-    connectionProfile: "ncc 连接配置", connectionLogin: "本机登录", connectionAppServer: "App Server", queueValue: "进行 {active} · 排队 {pending}", sessionsValue: "{count} 个",
+    connectionProfile: "ncc 连接配置", connectionLogin: "本机登录", connectionAppServer: "App Server", connectionApi: "API · {host}", engineApiKey: "API Key", apiKeyConfigured: "已配置", apiKeyMissing: "未配置", sessionsStateless: "不使用", engineKeyHint: "请在设置页填写 {key}，然后重启 Hub。", engineSwitchHint: "可以在设置页切换引擎。", engineSettings: "AI 引擎", engineSelect: "主模型引擎", engineBaseUrl: "接口地址", engineBaseUrlHint: "可换成中转地址；留空恢复默认。", restartHub: "重启 Hub", saveEngineSettings: "保存引擎设置", engineStatusRunning: "正在运行 {engine}。切换后要重启 Hub 才生效。", engineStatusPending: "设置已保存，重启 Hub 后使用 {engine}。", engineStatusReadOnly: "正在运行 {engine}。只能在运行 Hub 的这台电脑上修改。", engineKeySaved: "已配置。留空保持不变，页面不会显示已保存的 Key。", engineKeyEmpty: "还没有配置，需要填写才能使用。", engineKeyRequired: "请填写 {key}。", engineCodexModelHint: "Codex 的模型在 QQ 里用 /模型 切换。", engineRestartTitle: "重启 Hub？", engineRestartMessage: "正在进行的回复会被中断。如果 QQ 通道开着，重启后会自动恢复。", engineRestarting: "正在重启 Hub…", engineRestarted: "Hub 已重启，正在使用 {engine}。", engineRestartTimeout: "Hub 一分钟内没有恢复，请查看 runtime/logs/chat-hub-restart.log。", queueValue: "进行 {active} · 排队 {pending}", sessionsValue: "{count} 个",
     versionMissing: "命令不可用", versionChecking: "检查中",
     lastRunOk: "上次运行成功", lastRunFailed: "上次运行失败", lastRunNever: "还没有运行过", lastRunMeta: "{time} · 耗时 {duration}",
     quotaUnavailable: "暂无可用额度快照", quotaNotReported: "{engine} 不向 Hub 提供用量数据。", fiveHours: "5 小时窗口", sevenDays: "7 天窗口", remaining: "剩余 {value}%", resetsAt: "{time} 重置", noReset: "重置时间未知", recordedAt: "记录于 {time}",
@@ -106,7 +106,7 @@ const translations = {
     hubEndpoint: "Hub 地址", hubEndpointHint: "当前页面连接的 Hub 地址。", copy: "复制", rawState: "原始状态",
     lanAccess: "局域网访问", lanAccessHint: "只显示其他设备可达的物理局域网地址；若代理仍拦截，请把该地址设为直连。", lanLocalOnly: "仅本机可访问", lanNoAddress: "已开放，但没有找到物理局域网 IPv4 地址，请检查 Wi-Fi / 以太网或代理设置", copyLanToken: "复制访问令牌", lanEnableTitle: "开启局域网访问", lanEnableMessage: "同一局域网内的设备将可以打开控制台，管理接口仍受访问令牌保护。", lanAccessUpdated: "局域网访问设置已更新", lanTokenCopied: "访问令牌已复制", lanManagedByEnvironment: "监听地址由环境变量管理，无法在网页中修改。",
     publicTunnel: "临时公网访问", publicTunnelHint: "通过 Cloudflare Quick Tunnel 生成临时 HTTPS 地址；远端仍需访问令牌。", publicTunnelRunningHint: "公网地址已就绪。请把地址和令牌分开、安全地交给需要访问的人。", publicTunnelStarting: "正在创建临时公网地址…", publicTunnelOff: "未开启公网访问", publicTunnelUnavailable: "没有找到 cloudflared，请先安装并确保它在 Hub 的 PATH 中。", publicTunnelRemoteManaged: "为防止远端扩大访问范围，只能在本机页面开启、关闭和复制令牌。", publicTunnelError: "隧道启动失败：{error}", publicTunnelEnableTitle: "开启临时公网访问", publicTunnelEnableMessage: "这会把控制台临时开放到公网。远端管理接口仍需访问令牌，请只交给可信的人。", publicTunnelUpdated: "临时公网访问设置已更新", copyPublicTunnelUrl: "复制地址", publicTunnelUrlCopied: "公网地址已复制",
-    aboutBody: "把 QQ 接到本机 Codex 或 Claude Code 的本地中枢。", factEngine: "AI 引擎", factModel: "当前模型", factEffort: "思考强度", factStarted: "启动时间",
+    aboutBody: "把 QQ 接到本机 Codex、Claude Code，或 DeepSeek、Gemini API 的本地中枢。", factEngine: "AI 引擎", factModel: "当前模型", factEffort: "思考强度", factStarted: "启动时间",
     confirmAction: "确认操作", cancel: "取消", confirm: "确认", logDetail: "日志详情", close: "关闭", copyJson: "复制 JSON", done: "完成", copied: "已复制", copyFailed: "复制失败，请手动选择内容。",
     hubOnline: "Hub 在线", hubOffline: "Hub 离线", syncedNow: "刚刚同步",
     searchActions: "搜索页面或操作", commandHint: "↑↓ 选择 · Enter 执行 · Esc 关闭", noMatchingActions: "没有匹配的操作",
@@ -130,9 +130,9 @@ const translations = {
     stateOk: "Healthy", stateBusy: "Running", stateBad: "Problem", stateOff: "Off", statePending: "Checking",
     hubDetail: "Local API {endpoint}", oneBotDetail: "{name} · QQ {id}", oneBotDown: "Cannot reach OneBot: {error}", qqEnabledDetail: "{groups} allowlisted groups · {events} recent events", qqDisabledDetail: "QQ channel is off", qqBusyDetail: "Generating {active} · pending {pending}",
     webDetail: "{provider}", webLastQuery: "{provider} · last query: {query}", webDisabled: "Web lookup is off",
-    agentDetail: "{model} · effort {effort}", agentPathMissing: "{engine} command not found",
+    agentDetail: "{model} · effort {effort}", agentPathMissing: "{engine} command not found", agentKeyMissing: "{key} is not set",
     engineModel: "Model", engineEffort: "Reasoning effort", engineVersion: "CLI version", engineConnection: "Connection", engineQueue: "Task queue", engineSessions: "Persistent sessions",
-    connectionProfile: "ncc connection profile", connectionLogin: "Local login", connectionAppServer: "App Server", queueValue: "{active} running · {pending} queued", sessionsValue: "{count}",
+    connectionProfile: "ncc connection profile", connectionLogin: "Local login", connectionAppServer: "App Server", connectionApi: "API · {host}", engineApiKey: "API key", apiKeyConfigured: "Configured", apiKeyMissing: "Not set", sessionsStateless: "Not used", engineKeyHint: "Enter {key} on the Settings page, then restart the Hub.", engineSwitchHint: "Switch engines on the Settings page.", engineSettings: "AI engine", engineSelect: "Main model engine", engineBaseUrl: "API address", engineBaseUrlHint: "Can point at a relay; leave empty for the default.", restartHub: "Restart Hub", saveEngineSettings: "Save engine settings", engineStatusRunning: "Running {engine}. Changes apply after the Hub restarts.", engineStatusPending: "Settings saved. {engine} is used after the Hub restarts.", engineStatusReadOnly: "Running {engine}. It can only be changed on the computer running the Hub.", engineKeySaved: "Configured. Leave empty to keep it; a saved key is never shown.", engineKeyEmpty: "Not set yet. Required to use this engine.", engineKeyRequired: "Enter {key}.", engineCodexModelHint: "Switch the Codex model with /模型 in QQ.", engineRestartTitle: "Restart the Hub?", engineRestartMessage: "Replies in progress are interrupted. If the QQ channel is on, it reopens after the restart.", engineRestarting: "Restarting the Hub…", engineRestarted: "The Hub restarted and is using {engine}.", engineRestartTimeout: "The Hub did not return within a minute. Check runtime/logs/chat-hub-restart.log.", queueValue: "{active} running · {pending} queued", sessionsValue: "{count}",
     versionMissing: "Command unavailable", versionChecking: "Checking",
     lastRunOk: "Last run succeeded", lastRunFailed: "Last run failed", lastRunNever: "Not run yet", lastRunMeta: "{time} · took {duration}",
     quotaUnavailable: "No usage snapshot yet", quotaNotReported: "{engine} does not report usage to the Hub.", fiveHours: "5-hour window", sevenDays: "7-day window", remaining: "{value}% left", resetsAt: "Resets {time}", noReset: "Reset time unknown", recordedAt: "Recorded {time}",
@@ -193,7 +193,7 @@ const translations = {
     hubEndpoint: "Hub endpoint", hubEndpointHint: "The Hub address this page talks to.", copy: "Copy", rawState: "Raw state",
     lanAccess: "LAN access", lanAccessHint: "Only physical LAN addresses reachable by other devices are shown; if a proxy intercepts them, set them to DIRECT.", lanLocalOnly: "This computer only", lanNoAddress: "Enabled, but no physical LAN IPv4 address was found; check Wi-Fi / Ethernet or proxy settings", copyLanToken: "Copy access token", lanEnableTitle: "Enable LAN access", lanEnableMessage: "Devices on the same LAN will be able to open the console. Management APIs stay protected by the access token.", lanAccessUpdated: "LAN access updated", lanTokenCopied: "Access token copied", lanManagedByEnvironment: "The listening address is set by an environment variable and cannot be changed here.",
     publicTunnel: "Temporary public access", publicTunnelHint: "Creates a temporary HTTPS address with Cloudflare Quick Tunnel; remote access still needs the token.", publicTunnelRunningHint: "The public address is ready. Share the address and the token separately and only with people you trust.", publicTunnelStarting: "Creating a temporary public address…", publicTunnelOff: "Public access is off", publicTunnelUnavailable: "cloudflared was not found. Install it and make sure it is on the Hub PATH.", publicTunnelRemoteManaged: "To keep remote access from widening itself, only the local page can start, stop or copy the token.", publicTunnelError: "Tunnel failed to start: {error}", publicTunnelEnableTitle: "Enable temporary public access", publicTunnelEnableMessage: "This exposes the console to the internet for a while. Remote management still needs the token; share it only with people you trust.", publicTunnelUpdated: "Temporary public access updated", copyPublicTunnelUrl: "Copy address", publicTunnelUrlCopied: "Public address copied",
-    aboutBody: "A local hub that connects QQ to Codex or Claude Code on this machine.", factEngine: "AI engine", factModel: "Model", factEffort: "Reasoning effort", factStarted: "Started",
+    aboutBody: "A local hub that connects QQ to Codex or Claude Code on this machine, or to the DeepSeek or Gemini API.", factEngine: "AI engine", factModel: "Model", factEffort: "Reasoning effort", factStarted: "Started",
     confirmAction: "Confirm", cancel: "Cancel", confirm: "Confirm", logDetail: "Log detail", close: "Close", copyJson: "Copy JSON", done: "Done", copied: "Copied", copyFailed: "Copy failed. Select the content manually.",
     hubOnline: "Hub online", hubOffline: "Hub offline", syncedNow: "Synced just now",
     searchActions: "Search pages or actions", commandHint: "↑↓ select · Enter run · Esc close", noMatchingActions: "No matching actions",
@@ -299,7 +299,7 @@ function loadDashboardUiState() {
       logFilters: {
         level: ["", "error", "warn", "success", "info", "debug"].includes(logFilters.level) ? logFilters.level : "",
         category: boundedUiText(logFilters.category, 80),
-        engine: ["", "codex", "claude"].includes(logFilters.engine) ? logFilters.engine : "",
+        engine: ["", ...Object.keys(engineNames)].includes(logFilters.engine) ? logFilters.engine : "",
         query: boundedUiText(logFilters.query, 240),
         slow: ["", "500", "1000", "3000", "10000"].includes(String(logFilters.slow || "")) ? String(logFilters.slow || "") : "",
         limit: ["100", "250", "500", "1000"].includes(String(logFilters.limit || "")) ? String(logFilters.limit || "") : "250"
@@ -701,6 +701,7 @@ async function refreshView({ quiet = false } = {}) {
   if (["memory", "knowledge"].includes(app.view)) tasks.push(refreshMemory({ quiet }));
   if (app.view === "intelligence") tasks.push(refreshCharacterCard());
   if (app.view === "activity") tasks.push(refreshLogs({ quiet }));
+  if (app.view === "settings") tasks.push(refreshEngineSettings());
   await Promise.allSettled(tasks);
 }
 
@@ -744,6 +745,10 @@ function getEngineInfo() {
     cliPathExists: agent.cliPathExists,
     cliVersion: agent.cliVersion || null,
     connection: agent.connection || null,
+    transport: agent.transport || "",
+    keyName: agent.keyName || "",
+    apiKeyConfigured: agent.apiKeyConfigured ?? null,
+    apiHost: agent.apiHost || "",
     lastRunAt: agent.lastRunAt ?? null,
     lastDurationMs: agent.lastDurationMs ?? null,
     lastOk: agent.lastOk ?? null,
@@ -759,7 +764,7 @@ function engineSummary(engine) {
 
 function getEngineState(engine = getEngineInfo()) {
   if (!app.maintenance) return "pending";
-  if (engine.cliPathExists === false || engine.lastOk === false) return "bad";
+  if (engine.cliPathExists === false || engine.apiKeyConfigured === false || engine.lastOk === false) return "bad";
   return Number(engine.queue?.active || 0) > 0 ? "busy" : "ok";
 }
 
@@ -770,6 +775,110 @@ function renderEngineIdentity() {
   $("#topEngineName").textContent = engine.engine ? engine.name : "—";
   $("#topEngine").title = engine.engine ? engineSummary(engine) : "";
   updatePageIdentity();
+}
+
+// ---------- Engine settings ----------
+async function refreshEngineSettings() {
+  try {
+    app.engineSettings = await api("/api/agent-engine", {}, { key: "engine-settings" });
+    renderEngineSettings();
+  } catch (error) {
+    if (error.name !== "AbortError") $("#engineSettingsStatus").textContent = error.message;
+  }
+}
+
+function selectedEngineEntry() {
+  const engines = app.engineSettings?.engines || [];
+  return engines.find((entry) => entry.id === $("#engineSelect").value) || null;
+}
+
+function fillEngineFields() {
+  const entry = selectedEngineEntry();
+  if (!entry) return;
+  $("#engineModelField").hidden = !entry.modelEditable && entry.transport !== "cli";
+  const modelInput = $("#engineModelInput");
+  modelInput.value = entry.model || "";
+  modelInput.readOnly = !entry.modelEditable;
+  modelInput.title = entry.modelEditable ? "" : t("engineCodexModelHint");
+  const usesApi = entry.transport === "api";
+  $("#engineApiKeyField").hidden = !usesApi;
+  $("#engineBaseUrlField").hidden = !usesApi;
+  $("#engineApiKeyInput").value = "";
+  $("#engineBaseUrlInput").value = entry.baseUrl || "";
+  $("#engineApiKeyHint").textContent = t(entry.keyConfigured ? "engineKeySaved" : "engineKeyEmpty");
+}
+
+function renderEngineSettings() {
+  const settings = app.engineSettings;
+  if (!settings) return;
+  const select = $("#engineSelect");
+  const options = settings.engines.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.name)}</option>`).join("");
+  setHtml(select, options);
+  if (!app.engineFormDirty) {
+    select.value = settings.savedEngine;
+    fillEngineFields();
+  }
+  const nameOf = (id) => settings.engines.find((entry) => entry.id === id)?.name || id;
+  $("#engineSettingsStatus").textContent = !settings.canEdit
+    ? t("engineStatusReadOnly", { engine: nameOf(settings.runningEngine) })
+    : settings.restartPending
+      ? t("engineStatusPending", { engine: nameOf(settings.savedEngine) })
+      : t("engineStatusRunning", { engine: nameOf(settings.runningEngine) });
+  const busy = app.busyKeys.has("engine-settings");
+  for (const control of $$("input, select, button", $("#engineSettingsForm"))) control.disabled = busy || !settings.canEdit;
+  const restart = $("#restartHub");
+  restart.hidden = !settings.canEdit || !settings.restartPending;
+}
+
+async function saveEngineSettings() {
+  const entry = selectedEngineEntry();
+  if (!entry) return;
+  const apiKey = $("#engineApiKeyInput").value.trim();
+  if (entry.transport === "api" && !entry.keyConfigured && !apiKey) {
+    showToast(t("engineKeyRequired", { key: entry.keyName }), "error");
+    $("#engineApiKeyInput").focus();
+    return;
+  }
+  const body = { engine: entry.id };
+  const model = $("#engineModelInput").value.trim();
+  if (entry.modelEditable && model !== (entry.model || "")) body.model = model;
+  if (apiKey) body.apiKey = apiKey;
+  const baseUrl = $("#engineBaseUrlInput").value.trim();
+  if (entry.transport === "api" && baseUrl !== (entry.baseUrl || "")) body.baseUrl = baseUrl;
+  try {
+    app.engineSettings = await mutate(
+      () => api("/api/agent-engine", { method: "POST", body: JSON.stringify(body) }),
+      { control: $("#saveEngineSettings"), busyKey: "engine-settings" }
+    );
+    app.engineFormDirty = false;
+  } catch {
+    // mutate already reported the error; the form keeps what was typed.
+  }
+  renderEngineSettings();
+}
+
+async function restartHubFromDashboard() {
+  if (!await confirmAction(t("engineRestartTitle"), t("engineRestartMessage"))) return;
+  const previousStart = app.maintenance?.startedAt || null;
+  const saved = app.engineSettings?.engines.find((entry) => entry.id === app.engineSettings.savedEngine)?.name || "";
+  app.busyKeys.add("engine-settings");
+  renderEngineSettings();
+  $("#engineSettingsStatus").textContent = t("engineRestarting");
+  try {
+    await api("/api/agent-engine/restart", { method: "POST", body: "{}" });
+    let back = false;
+    for (let attempt = 0; attempt < 60 && !back; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      const status = await api("/api/maintenance", {}, { retryAuth: false }).catch(() => null);
+      back = Boolean(status?.startedAt && status.startedAt !== previousStart);
+    }
+    showToast(back ? t("engineRestarted", { engine: saved }) : t("engineRestartTimeout"), back ? "success" : "error");
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    app.busyKeys.delete("engine-settings");
+  }
+  await refreshView();
 }
 
 // ---------- Rendering ----------
@@ -908,7 +1017,9 @@ function renderServiceList(errorMessage = "") {
       id: "agent",
       icon: icons.agent,
       state: states.agent,
-      detail: engine.cliPathExists === false
+      detail: engine.apiKeyConfigured === false
+        ? t("agentKeyMissing", { key: engine.keyName })
+        : engine.cliPathExists === false
         ? t("agentPathMissing", { engine: engine.name })
         : engine.lastOk === false && engine.lastError
           ? compactUiText(engine.lastError, 140)
@@ -953,23 +1064,35 @@ function renderEngineCard() {
   const badge = $("#engineState");
   badge.className = `badge ${state}`;
   badge.textContent = stateLabel(state);
-  const connection = engine.engine === "claude"
-    ? (engine.connection === "profile" ? t("connectionProfile") : t("connectionLogin"))
-    : t("connectionAppServer");
+  const usesApi = engine.transport === "api";
+  const connection = usesApi
+    ? t("connectionApi", { host: engine.apiHost || t("unknown") })
+    : engine.engine === "claude"
+      ? (engine.connection === "profile" ? t("connectionProfile") : t("connectionLogin"))
+      : t("connectionAppServer");
   const version = engine.cliPathExists === false ? t("versionMissing") : engine.cliVersion || (app.maintenance ? t("versionChecking") : "—");
   const facts = [
     [t("engineModel"), engine.model || "—", true],
     [t("engineEffort"), engine.reasoningEffort || "—", false],
-    [t("engineVersion"), version, Boolean(engine.cliVersion)],
+    usesApi
+      ? [t("engineApiKey"), t(engine.apiKeyConfigured ? "apiKeyConfigured" : "apiKeyMissing"), false]
+      : [t("engineVersion"), version, Boolean(engine.cliVersion)],
     [t("engineConnection"), connection, false],
     [t("engineQueue"), t("queueValue", { active: engine.queue?.active || 0, pending: engine.queue?.pending || 0 }), false],
-    [t("engineSessions"), t("sessionsValue", { count: app.state?.qq?.codexSession?.activeThreads ?? 0 }), false]
+    [t("engineSessions"), usesApi ? t("sessionsStateless") : t("sessionsValue", { count: app.state?.qq?.codexSession?.activeThreads ?? 0 }), false]
   ];
   setHtml($("#engineFacts"), facts.map(([label, value, mono]) => `<div><dt>${escapeHtml(label)}</dt><dd class="${mono ? "mono" : ""}" title="${escapeHtml(value)}">${escapeHtml(value)}</dd></div>`).join(""));
   const lastRun = engine.lastRunAt
     ? `<div class="last-run-line"><span class="badge ${engine.lastOk === false ? "bad" : "ok"}">${escapeHtml(engine.lastOk === false ? t("lastRunFailed") : t("lastRunOk"))}</span><span class="muted">${escapeHtml(t("lastRunMeta", { time: formatRelative(engine.lastRunAt), duration: formatMs(engine.lastDurationMs) }))}</span></div>${engine.lastOk === false && engine.lastError ? `<p class="last-run-error">${escapeHtml(compactUiText(engine.lastError, 320))}</p>` : ""}`
     : `<div class="last-run-line"><span class="badge off">${escapeHtml(t("lastRunNever"))}</span></div>`;
   setHtml($("#engineLastRun"), lastRun);
+  const hint = $("#engineHint");
+  hint.classList.toggle("service-error", engine.apiKeyConfigured === false);
+  hint.textContent = !engine.engine
+    ? ""
+    : engine.apiKeyConfigured === false
+      ? t("engineKeyHint", { key: engine.keyName })
+      : t("engineSwitchHint");
 }
 
 function renderQuota() {
@@ -2773,6 +2896,18 @@ $("#refreshHealth").addEventListener("click", () => refreshMaintenance({ force: 
 $("#refreshMemory").addEventListener("click", () => refreshMemory().catch(() => undefined));
 $("#refreshLogs").addEventListener("click", () => refreshLogs().catch(() => undefined));
 $("#qqToggle").addEventListener("change", (event) => setChannel("qq", event.target.checked, event.target));
+$("#engineSelect").addEventListener("change", () => {
+  app.engineFormDirty = true;
+  fillEngineFields();
+});
+for (const selector of ["#engineModelInput", "#engineApiKeyInput", "#engineBaseUrlInput"]) {
+  $(selector).addEventListener("input", () => { app.engineFormDirty = true; });
+}
+$("#engineSettingsForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  void saveEngineSettings();
+});
+$("#restartHub").addEventListener("click", () => { void restartHubFromDashboard(); });
 $("#lanAccessToggle").addEventListener("change", (event) => { void setLanAccess(event.target.checked, event.target); });
 $("#publicTunnelToggle").addEventListener("change", (event) => { void setPublicTunnel(event.target.checked, event.target); });
 $("#groupInput").addEventListener("input", (event) => {
