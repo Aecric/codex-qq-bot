@@ -1,4 +1,5 @@
 import test from "node:test";
+import { spawn } from "node:child_process";
 import assert from "node:assert/strict";
 import { findCodexModel, normalizeCodexModels, readCodexModels } from "../src/codex-model-catalog.js";
 
@@ -48,7 +49,10 @@ test("finds a Codex model by picker number, id, or model slug", () => {
 
 test("rejects cleanly when the Codex app-server exits before reading stdin", async () => {
   await assert.rejects(
-    readCodexModels({ codexPath: "/bin/false", timeoutMs: 1_000 }),
+    readCodexModels({
+      timeoutMs: 1_000,
+      spawnProcess: (_command, _args, options) => spawn(process.execPath, ["-e", "process.exit(1)"], options)
+    }),
     /EPIPE|exited with|stdin closed/
   );
 });

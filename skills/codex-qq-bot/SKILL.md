@@ -573,3 +573,9 @@ curl -fsS --max-time 3 http://127.0.0.1:3000/get_login_info | jq .
 
 Report the test suite, Hub, dashboard, OneBot login, QQ channel, and recent
 fatal/error logs separately. A process existing is not end-to-end proof.
+
+## Local macOS deployment note
+
+Available memory includes vm_stat free, inactive and speculative pages; swap, compressed, active and wired pages are excluded. If vm_stat fails, keep the conservative Node free-memory fallback. Use the real canonical TMPDIR during verification on macOS.
+
+NapCat HTTP callbacks use X-Signature HMAC-SHA1 over raw request bytes. Preserve signature verification, bearer auth, byte limits and JSON validation when changing webhook handling.

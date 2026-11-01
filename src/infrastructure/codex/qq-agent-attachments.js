@@ -13,9 +13,10 @@ export async function parseQqAgentOutputWithAttachmentImport(value, {
   outputDir = "",
   generatedAfterMs = 0,
   maxImageBytes = DEFAULT_MAX_IMAGE_BYTES,
-  recoverUnlistedGeneratedImage = false
+  recoverUnlistedGeneratedImage = false,
+  scrubBubbles = null
 } = {}) {
-  const parsed = parseQqAgentOutput(value, { bubbleSeparator });
+  const parsed = parseQqAgentOutput(value, { bubbleSeparator, scrubBubbles });
   if (!parsed.structured || !parsed.value) {
     return {
       ...parsed,
@@ -37,7 +38,7 @@ export async function parseQqAgentOutputWithAttachmentImport(value, {
     ? reconcileRecoveredImageDeliveryText(materialized.value)
     : materialized.value;
   const normalized = materialized.changed || reconciledValue !== materialized.value
-    ? parseQqAgentOutput(JSON.stringify(reconciledValue), { bubbleSeparator })
+    ? parseQqAgentOutput(JSON.stringify(reconciledValue), { bubbleSeparator, scrubBubbles })
     : parsed;
   return {
     ...normalized,

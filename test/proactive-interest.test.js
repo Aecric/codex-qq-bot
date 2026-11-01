@@ -1027,7 +1027,8 @@ test("the interest judge sees attached pictures and falls back to text when a mo
   const multimodal = bodies[0].messages[1].content;
   assert.equal(multimodal[0].type, "text");
   assert.deepEqual(JSON.parse(multimodal[0].text).attachedImages, [{ index: 1, origin: "当前消息", sender: "小明", at: null }]);
-  assert.deepEqual(multimodal[1], { type: "image_url", image_url: { url: "data:image/jpeg;base64,AAAA" } });
+  assert.deepEqual(multimodal[1], { type: "text", text: "【attachedImages 第 1 张】来源：当前消息，发送者：小明。" });
+  assert.deepEqual(multimodal[2], { type: "image_url", image_url: { url: "data:image/jpeg;base64,AAAA" } });
   assert.match(bodies[0].messages[0].content, /【图片】/);
 
   // A text-only model: one rejected image request, then the same attempt as text.
@@ -1059,4 +1060,21 @@ test("the interest judge sees attached pictures and falls back to text when a mo
   });
   assert.equal(off.ok, true);
   assert.equal(loads, loadsBefore);
+});
+
+test("proactive judge keeps the caller's provider snapshot when live state switches provider", async () => {
+  let request;
+  const state = proactiveState(1500, { model: "gemma4:e4b" });
+  Object.assign(state.proactive.judge, { provider: "ollama", baseUrl: "http://127.0.0.1:11434/v1" });
+  await shouldProactivelyReplyToQq(event, state, {
+    interestModelApiKey: "codex-local",
+    interestModel: { provider: "codex", model: "gpt-6-luna", baseUrl: "codex://local" },
+    fetch: async (url, options) => {
+      request = { url, body: JSON.parse(options.body) };
+      return jsonJudgeResponse();
+    }
+  });
+
+  assert.equal(request.url, "codex://local/chat/completions");
+  assert.equal(request.body.model, "gpt-6-luna");
 });

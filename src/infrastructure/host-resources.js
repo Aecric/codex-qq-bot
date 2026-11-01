@@ -1,10 +1,16 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { readFile } from "node:fs/promises";
 import { availableParallelism, freemem, totalmem } from "node:os";
 import { posix } from "node:path";
 
+const execute = promisify(execFile);
+
 // Startup snapshot only. Missing Linux/cgroup files fall back to OS facts.
 export async function detectHostResources({
   read = (path) => readFile(path, "utf8"),
+  platform = process.platform,
+  vmStat = async () => (await execute("/usr/bin/vm_stat", [], { timeout: 2000, maxBuffer: 16384 })).stdout,
   totalMemoryBytes = totalmem(), freeMemoryBytes = freemem(), cpuCount = availableParallelism()
 } = {}) {
   const text = async (path) => { try { return String(await read(path)); } catch { return ""; } };
@@ -13,6 +19,19 @@ export async function detectHostResources({
   ]);
   const availableKb = /^MemAvailable:\s+(\d+)/m.exec(meminfo)?.[1];
   let availableMemoryBytes = Math.min(totalMemoryBytes, availableKb ? Number(availableKb) * 1024 : freeMemoryBytes);
+  if (platform === "darwin" && !availableKb) {
+    try {
+      // Inactive and speculative pages can be reclaimed. Never count swap,
+      // compressed memory, or active/wired pages as available headroom.
+      const snapshot = String(await vmStat());
+      const pageSize = Number(/page size of (\d+) bytes/.exec(snapshot)?.[1]);
+      const pages = ["free", "inactive", "speculative"].map((kind) =>
+        Number(new RegExp(`^Pages ${kind}:\\s+(\\d+)`, "m").exec(snapshot)?.[1]));
+      if (pageSize > 0 && pages.every(Number.isFinite)) {
+        availableMemoryBytes = Math.min(totalMemoryBytes, pages.reduce((a, b) => a + b, 0) * pageSize);
+      }
+    } catch { /* Keep the conservative OS fallback when vm_stat is unavailable. */ }
+  }
   let memoryLimitBytes = totalMemoryBytes;
   let effectiveCpuCount = Math.max(0.01, cpuCount);
   const memberships = membership.trim().split("\n").map((line) => {

@@ -315,3 +315,16 @@ test("sticker, message, lookup and self-state tools stay structured and bound to
   assert.equal(normalizeDynamicToolResult(inspected).contentItems.some((item) => item.type === "inputImage"), true);
   assert.equal(mapQqNativeToolToCommand("qq_sticker", "manage", { action: "inspect", selector: "x" }), "");
 });
+
+test("ask_gemini is offered only when Gemini is configured and maps to the internal command", () => {
+  const toolNames = (specs) => specs.find((spec) => spec.name === "qq_search").tools.map((tool) => tool.name);
+  assert.ok(!toolNames(buildQqNativeToolSpecs({})).includes("ask_gemini"));
+  assert.ok(toolNames(buildQqNativeToolSpecs({ canAskGemini: true })).includes("ask_gemini"));
+  assert.equal(mapQqNativeToolToCommand("qq_search", "ask_gemini", { question: "“请进”\n是什么梗" }), "/问Gemini “请进” 是什么梗");
+});
+
+test("group chats never get the host command tool, even for the owner", () => {
+  const runtimeTools = (specs) => specs.find((spec) => spec.name === "qq_runtime")?.tools.map((tool) => tool.name) || [];
+  assert.ok(runtimeTools(buildQqNativeToolSpecs({ isOwner: true })).includes("host_command"));
+  assert.ok(!runtimeTools(buildQqNativeToolSpecs({ isOwner: true, allowHostCommand: false })).includes("host_command"));
+});

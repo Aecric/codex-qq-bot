@@ -22,7 +22,9 @@ import {
   superviseAgentChild
 } from "./infrastructure/agent/agent-turn-process.js";
 
-const DEFAULT_MAX_PROTOCOL_BYTES = 8 * 1024 * 1024;
+// Native image generation echoes each picture's base64 in several protocol
+// events, so one drawing turn can pass 8 MiB; the cap still stops runaways.
+const DEFAULT_MAX_PROTOCOL_BYTES = 32 * 1024 * 1024;
 const errors = createAgentTurnErrors("Codex app-server");
 // "dynamic" registers QQ tools as App Server dynamic tools; "mcp" serves them
 // from a per-turn MCP server, which Codex always defers behind tool search

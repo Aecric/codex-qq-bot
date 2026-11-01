@@ -83,7 +83,7 @@ export class HttpError extends Error {
   }
 }
 
-export async function readBody(req, { maxBytes = 1024 * 1024, requireJson = false } = {}) {
+export async function readBody(req, { maxBytes = 1024 * 1024, requireJson = false, verifyRawBody = null } = {}) {
   const contentType = String(req.headers?.["content-type"] || "").split(";", 1)[0].trim().toLowerCase();
   if (requireJson && contentType !== "application/json") {
     throw new HttpError(415, "Content-Type must be application/json");
@@ -103,8 +103,9 @@ export async function readBody(req, { maxBytes = 1024 * 1024, requireJson = fals
     }
     chunks.push(buffer);
   }
-  if (chunks.length === 0) return {};
-  const text = Buffer.concat(chunks).toString("utf8").trim();
+  const rawBody = Buffer.concat(chunks);
+  if (verifyRawBody) await verifyRawBody(rawBody);
+  const text = rawBody.toString("utf8").trim();
   if (!text) return {};
   try {
     const body = JSON.parse(text);

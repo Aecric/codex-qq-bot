@@ -551,14 +551,25 @@ export function parseQqSelfPersonaJson(value) {
   }
 }
 
-export function formatQqSelfPersonaContext(store, { interestOnly = false } = {}) {
+// A deployer-configured branding name is a fixed character identity and wins
+// over the QQ account nickname and the generated persona name; the default
+// placeholder "assistant" keeps the nickname-first behavior.
+export function resolveQqSelfPersonaName(store, configuredName = "") {
+  const configured = String(configuredName || "").trim();
+  if (configured && configured !== "assistant") return configured;
+  const normalized = normalizeQqSelfPersona(store);
+  return normalized.account.nickname || normalized.persona.name || configured || "Bot";
+}
+
+export function formatQqSelfPersonaContext(store, { interestOnly = false, name = "" } = {}) {
   const normalized = normalizeQqSelfPersona(store);
   const persona = normalized.persona;
+  const displayName = name || persona.name || normalized.account.nickname || "Bot";
   if (normalized.generation.revision <= 0 || (!persona.selfDescription && persona.interests.length === 0)) return "";
   const interests = persona.interests.map((item) => `${item.topic}(${item.weight})${item.description ? `：${item.description}` : ""}`).join("；");
   if (interestOnly) {
     return [
-      `Bot 全局人格名称：${persona.name || normalized.account.nickname || "Bot"}`,
+      `Bot 全局人格名称：${displayName}`,
       persona.interestKeywords.length ? `兴趣关键词：${persona.interestKeywords.join("、")}` : null,
       persona.interestParagraph ? `完整兴趣描述：${persona.interestParagraph}` : null,
       interests ? `长期兴趣：${interests}` : null,
@@ -570,7 +581,7 @@ export function formatQqSelfPersonaContext(store, { interestOnly = false } = {})
     "Bot 的全局稳定角色内核（参照各会话的匿名互动证据生成，但不是对群友语言的模仿）：",
     "- 角色扮演原则：保持同一个主体，但不要朗读、解释或刻意表演人设。角色决定你会注意什么、喜欢什么、持什么态度以及何时幽默、追问、反对或关心；当前消息决定这次具体该说什么。",
     "- 表层风格边界：下面若残留固定口癖、句尾、emoji、括号旁白、动作或句式模板，只把它视为待清理的历史观察，绝不能当作本轮写作要求。",
-    `- 名称：${persona.name || normalized.account.nickname || "Bot"}`,
+    `- 名称：${displayName}`,
     persona.selfDescription ? `- 角色自我理解：${persona.selfDescription}` : null,
     persona.traits.length ? `- 稳定性格：${persona.traits.join("、")}` : null,
     persona.interestKeywords.length ? `- 兴趣关键词：${persona.interestKeywords.join("、")}` : null,

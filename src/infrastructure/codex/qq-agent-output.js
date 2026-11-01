@@ -66,7 +66,7 @@ export const qqAgentOutputSchema = Object.freeze({
   }
 });
 
-export function parseQqAgentOutput(value, { bubbleSeparator = "|||" } = {}) {
+export function parseQqAgentOutput(value, { bubbleSeparator = "|||", scrubBubbles = null } = {}) {
   const raw = String(value || "").trim();
   const parsed = parseJsonObject(raw);
   if (!parsed) {
@@ -82,12 +82,14 @@ export function parseQqAgentOutput(value, { bubbleSeparator = "|||" } = {}) {
     return { structured: true, output: "[[qq_silent]]", value: parsed };
   }
 
-  const bubbles = Array.isArray(parsed.bubbles)
+  const cleanedBubbles = Array.isArray(parsed.bubbles)
     ? parsed.bubbles.map(cleanVisibleText).filter(Boolean).slice(0, 24)
     : [];
+  const bubbles = scrubBubbles && cleanedBubbles.length ? scrubBubbles(cleanedBubbles) : cleanedBubbles;
+  const fallbackText = cleanVisibleText(parsed.text);
   const text = bubbles.length
     ? bubbles.join(`\n${String(bubbleSeparator || "|||").trim() || "|||"}\n`)
-    : cleanVisibleText(parsed.text);
+    : (scrubBubbles && fallbackText ? scrubBubbles([fallbackText]).join("\n") : fallbackText);
   const directives = [];
   const mode = String(parsed.reply?.mode || "automatic");
   const targetUserId = normalizeQqId(parsed.reply?.targetUserId);

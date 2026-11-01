@@ -119,8 +119,10 @@ test("API outage falls back to the configured Git remote and resolves its exact 
 test("inherited Termux variables identify the existing Linux guest and its userland architecture", async (t) => {
   const home = await workspace(t);
   await executable(join(home, "dpkg"), "printf 'armhf\\n'");
+  await executable(join(home, "uname"), "printf 'Linux\\n'");
   const result = await run("bash", [join(root, "scripts/install-environment.sh"), "--report"], {
     CODEX_QQ_BOT_BOOTSTRAP_PLATFORM: "", CODEX_QQ_BOT_BOOTSTRAP_OS: "", CODEX_QQ_BOT_BOOTSTRAP_ARCH: "",
+    CODEX_QQ_BOT_UNDER_TERMUX: "1",
     TERMUX_VERSION: "fixture", PREFIX: "/data/data/com.termux/files/usr", PATH: `${home}:${process.env.PATH}`
   });
   assert.equal(result.status, 0, result.stderr);

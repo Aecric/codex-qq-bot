@@ -64,9 +64,30 @@ test("startup detection respects cgroup hierarchies and falls back to OS resourc
   ];
   for (const { name, files, expected } of cases) {
     const detected = await detectHostResources({
+      platform: "linux",
       read: async (path) => { if (!files) throw new Error("no Linux resource files"); return files[path] || ""; },
       totalMemoryBytes: 8192 * MiB, freeMemoryBytes: 7000 * MiB, cpuCount: 8
     });
     for (const [key, value] of Object.entries(expected)) assert.equal(detected[key], value, `${name}: ${key}`);
   }
+});
+
+
+test("macOS includes reclaimable pages without counting compressed memory or swap", async () => {
+  const detected = await detectHostResources({
+    platform: "darwin", read: async () => "", totalMemoryBytes: 8192 * MiB,
+    freeMemoryBytes: 100 * MiB, cpuCount: 4,
+    vmStat: async () => `Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free: 6400.
+Pages inactive: 128000.
+Pages speculative: 6400.
+Pages occupied by compressor: 999999.
+`
+  });
+  assert.equal(detected.availableMemoryBytes, 2200 * MiB);
+  const fallback = await detectHostResources({
+    platform: "darwin", read: async () => "", totalMemoryBytes: 8192 * MiB,
+    freeMemoryBytes: 100 * MiB, cpuCount: 4, vmStat: async () => "unrecognized"
+  });
+  assert.equal(fallback.availableMemoryBytes, 100 * MiB);
 });

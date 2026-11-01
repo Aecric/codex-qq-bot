@@ -32,7 +32,9 @@ export function buildQqNativeToolSpecs({
   hasStickerCandidates = false,
   hasMemoryPeople = false,
   canRecordRobotProfiles = false,
-  canSearchImages = false
+  canSearchImages = false,
+  canAskGemini = false,
+  allowHostCommand = true
 } = {}) {
   if (!toolsEnabled) return [];
   const namespaces = [
@@ -196,6 +198,11 @@ export function buildQqNativeToolSpecs({
           selector: string("download: a selector such as web-image-1 from this turn's search results; otherwise empty.")
         }, ["action"]),
         webRead
+      )] : []), ...(canAskGemini ? [fn(
+        "ask_gemini",
+        "Ask Google Gemini (a rival model the persona may call a colleague) to decode a chat riddle, pun, homophone, meme or in-joke you cannot understand. Put the puzzling message plus the few surrounding lines that give it meaning into question. Treat the answer as a second opinion, then reply in your own words; do not use it for facts, tasks or anything private.",
+        objectSchema({ question: string("The puzzling message and its short surrounding context, in Chinese.") }),
+        webRead
       )] : [])]
     },
     {
@@ -285,7 +292,7 @@ export function buildQqNativeToolSpecs({
         "Load bounded QQ history so this same native Agent turn can summarize it. This does not start a nested model process.",
         objectSchema({ range: string("最近, 全部, a count, a range, or a keyword.") }),
         readOnly
-      ), fn(
+      ), ...(allowHostCommand ? [fn(
         "host_command",
         "Request elevated host access for exactly one shell command and execute it if the Hub verifies the original sender is the owner. Use for explicit owner tasks that exceed the native workspace, need network or program startup, or cannot run in the native sandbox. Administrators and ordinary users cannot gain host access. Decide whether to ask the human first from the actual request and risk; permission alone is not task authorization. Check exit status and actual results before claiming success. No persistent grant or automatic retry.",
         objectSchema({
@@ -295,7 +302,7 @@ export function buildQqNativeToolSpecs({
           timeoutMs: { type: "integer", minimum: 1, maximum: 120000, description: "Command deadline; defaults to 30000 ms. Use the machine's existing session manager for an explicitly requested persistent interactive program." }
         }, ["command", "reason"]),
         privileged
-      )]
+      )] : [])]
     }] : [])
   ];
   return namespaces.filter((namespace) => namespace.tools.length > 0);
@@ -465,6 +472,7 @@ export function mapQqNativeToolToCommand(namespace, tool, args = {}, { event = n
     return joinCommand("/知识库", action, args.title, args.scope ? `| ${args.scope}` : "");
   }
   if (ns === "qq_search" && name === "chinese_web") return `/联网 ${clean(args.query)}`;
+  if (ns === "qq_search" && name === "ask_gemini") return `/问Gemini ${clean(args.question)}`;
   if (ns === "qq_runtime" && name === "configure" && (event?.isOwner || event?.isBotAdmin)) {
     const command = `/${clean(args.command).replace(/^\/+/, "")}`;
     const task = parseQqManualAiTaskCommand(command);

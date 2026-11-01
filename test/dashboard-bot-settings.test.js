@@ -52,7 +52,9 @@ test("dashboard Bot settings update bounded runtime controls and can roll back",
     judgeProviders: [
       { id: "openrouter", label: "OpenRouter", defaultModel: "openrouter/free" },
       { id: "deepseek", label: "DeepSeek", defaultModel: "deepseek-v4-flash" },
-      { id: "custom", label: "自定义兼容服务", defaultModel: "gpt-4o-mini" }
+      { id: "custom", label: "自定义兼容服务", defaultModel: "gpt-4o-mini" },
+      { id: "codex", label: "本机 Codex", defaultModel: "gpt-6-luna" },
+      { id: "ollama", label: "本机 Ollama", defaultModel: "gemma4:e4b-it-qat" }
     ]
   });
 
