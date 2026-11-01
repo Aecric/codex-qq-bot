@@ -297,6 +297,20 @@ Hub 和 OneBot 两端 token 应一致。未配置 token 时，Webhook 仅信任 
 
 仪表盘“智能行为”页或 QQ 主人命令 `/兴趣厂商 openrouter|deepseek|custom|codex|ollama` 可切换厂商，`/兴趣模型 模型ID` 可覆盖默认模型。密钥始终只从环境读取，不写入 `data/settings.json`。OpenRouter 使用严格 JSON Schema；DeepSeek 和自定义兼容服务使用 JSON Object 模式。`codex` 不需要 key：每次判断都是本机 Codex 登录上的一轮无工具、低思考强度任务（默认模型 `gpt-6-luna`），与回复共用 Codex 队列。`ollama` 同样不需要 key：调用本机 Ollama（默认模型 `gemma4:e4b-it-qat`，4-bit 量化，运行时约 4GB；16GB 内存的机器上非量化版约 10GB，会把 NapCat 挤进 swap），关闭思考（只有附带图片时用 `low` 短暂思考，否则小模型容易误读图片来源）并发送 `keep_alive: -1` 让模型常驻，单次判断只需几秒；使用前先 `ollama pull gemma4:e4b-it-qat`。可运行 `npm run ncc -- search-config` 初始化仓库环境文件。排障先看 `/api/maintenance` 和 `search` / `interest` 日志。
 
+### 角色卡
+
+仪表盘“行为”页可以编辑或上传角色卡（`.md`、`.txt`），保存后下一条回复起生效，不用重启。内容保存在 `CODEX_REMOTE_CONTACT_ASSISTANT_PROFILE_PATH` 指向的文件；没设置时保存到 `config/characters/assistant-profile.md`。上一版保留为同目录的 `<文件名>.bak`。角色卡最多 6000 字符，超出时网页拒绝保存；手动改文件超长时只使用前 6000 字符，并写一条警告日志。角色卡每轮都会带上，世界观等只在聊到时才需要的资料放知识库。
+
+### 知识库导入导出
+
+仪表盘“知识”页提供三个操作：
+
+- **下载模板**：ZIP 内有 `README.md`、`notes.md`（知识）和 `slang.md`（黑话）。每个标题是一条，标题下第一行可写 `别名：a, b`；`slang.md` 也可以每行写一条 `词语：含义`。
+- **导出备份**：ZIP 内有 `README.md`、`knowledge.json` 和 `images/`，保留每条的类型、别名、范围和配图。备份可能含有聊天内容、群号和 QQ 号，请妥善保管。配图总量超过 24 MiB 时多余的不打包，页面会提示数量。
+- **导入**：接受 ZIP、`.md` 和 `.txt`，不超过 32 MiB。先预览，勾选条目后选择应用到全局或指定的群；备份还可以保留原来的范围。
+
+导入只新增或更新，不删除；相同标题在相同范围内被新内容覆盖。标题最多 80 字符，内容每条最多 800 字符：知识超长时拆成“标题（2）”，黑话超长时截断，预览里都会提示。知识库总共最多 500 条，导入超出时整次不生效。接口是 `GET /api/qq/knowledge/template`、`GET /api/qq/knowledge/export` 和 `POST /api/qq/knowledge/import`。
+
 ### 日志
 
 - Hub 只保留一条 QQ/OneBot 消息链路。旧的 `CODEX_REMOTE_CONTACT_IMESSAGE_*` 与 `CODEX_REMOTE_CONTACT_REMOTE_EXECUTION_*` 变量会被忽略。

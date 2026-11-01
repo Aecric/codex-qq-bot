@@ -280,6 +280,23 @@
               <div class="behavior-column behavior-column-main">
                 <section class="card">
                   <header class="card-head">
+                    <div><h2 data-i18n="characterCard">角色卡</h2><p data-i18n="characterCardHint">Bot 的身份和说话方式，每次回复都会带上，下一条回复起生效。世界观等资料放到知识库更省上下文。</p></div>
+                    <span id="characterCardStatus" class="save-state" data-i18n="settingsSynced">设置已同步</span>
+                  </header>
+                  <form id="characterCardForm" class="stack">
+                    <textarea id="characterCardContent" rows="12" spellcheck="false" aria-labelledby="characterCardFile" placeholder="# 角色卡" data-i18n-placeholder="characterCardPlaceholder"></textarea>
+                    <div class="character-card-foot">
+                      <span class="field-hint"><span id="characterCardCount"></span> · <span id="characterCardFile"></span></span>
+                      <div class="character-card-actions">
+                        <input id="characterCardUpload" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden />
+                        <button id="characterCardUploadButton" class="button ghost small" type="button" data-i18n="characterCardUpload">上传文件</button>
+                        <button id="saveCharacterCard" class="button primary small" type="submit" data-i18n="characterCardSave">保存角色卡</button>
+                      </div>
+                    </div>
+                  </form>
+                </section>
+                <section class="card">
+                  <header class="card-head">
                     <div><h2 data-i18n="selfPersona">Bot 全局人设</h2><p data-i18n="selfPersonaHint">从各群和私聊的匿名摘要生成；QQ 昵称固定作为名字。</p></div>
                     <button class="button small ghost" type="button" data-open-feature-logs="learning" data-log-query="self persona" data-i18n="viewDetailedLogs">查看日志</button>
                   </header>
@@ -364,6 +381,9 @@
                   <option value="frequency" data-i18n="knowledgeSortFrequency">出现频率</option>
                   <option value="title" data-i18n="knowledgeSortTitle">标题</option>
                 </select>
+                <button id="knowledgeTemplate" class="button ghost" type="button" data-i18n="knowledgeTemplate">下载模板</button>
+                <button id="knowledgeExport" class="button ghost" type="button" data-i18n="knowledgeExport">导出备份</button>
+                <button id="knowledgeImport" class="button ghost" type="button" data-i18n="knowledgeImport">导入</button>
                 <button id="newKnowledge" class="button primary" type="button" data-new-knowledge data-i18n="newKnowledge">新建知识</button>
               </div>
               <div id="knowledgeWorkspace" class="knowledge-workspace">
@@ -513,6 +533,36 @@
           <label class="field knowledge-member-field" hidden><span data-i18n="knowledgeUserName">成员名称</span><input id="knowledgeUserName" maxlength="100" /></label>
         </div>
         <div class="modal-actions"><button class="button ghost" type="button" data-close-knowledge-editor data-i18n="cancel">取消</button><button id="saveKnowledge" class="button primary" type="submit" data-i18n="saveKnowledge">保存知识</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="knowledgeImportDialog" class="modal wide" aria-labelledby="knowledgeImportTitle">
+      <form id="knowledgeImportForm" class="modal-body">
+        <header class="modal-head"><h2 id="knowledgeImportTitle" data-i18n="knowledgeImportTitle">导入知识库</h2><button class="icon-button" type="button" data-close-knowledge-import aria-label="关闭" data-i18n-aria-label="close">×</button></header>
+        <div class="form-grid">
+          <label class="field"><span data-i18n="knowledgeImportFile">文件</span><input id="knowledgeImportFile" type="file" accept=".zip,.md,.markdown,.txt,application/zip,text/markdown,text/plain" required /></label>
+          <label class="field"><span data-i18n="knowledgeImportDefaultKind">单个文本文件的类型</span><select id="knowledgeImportDefaultKind"><option value="note" data-i18n="knowledgeKindNote">知识</option><option value="slang" data-i18n="knowledgeKindSlang">黑话</option></select></label>
+        </div>
+        <p class="field-note" data-i18n="knowledgeImportHint">支持 ZIP 包和 .md、.txt 文件，不超过 32 MB。ZIP 包按 notes.md、slang.md 分类，写法见模板里的 README。</p>
+        <div id="knowledgeImportReview" class="stack" hidden>
+          <div class="knowledge-import-head">
+            <strong id="knowledgeImportSummary"></strong>
+            <label class="checkbox-line"><input id="knowledgeImportAll" type="checkbox" checked /><span data-i18n="knowledgeImportSelectAll">全选</span></label>
+          </div>
+          <div id="knowledgeImportWarnings" class="chip-row"></div>
+          <div id="knowledgeImportList" class="knowledge-import-list"></div>
+          <fieldset class="knowledge-import-scope">
+            <legend data-i18n="knowledgeImportScope">应用到</legend>
+            <label id="knowledgeImportKeepOption" class="checkbox-line" hidden><input type="radio" name="knowledgeImportScope" value="keep" /><span data-i18n="knowledgeImportScopeKeep">保留备份里的范围</span></label>
+            <label class="checkbox-line"><input type="radio" name="knowledgeImportScope" value="global" checked /><span data-i18n="knowledgeImportScopeGlobal">全局（所有群和私聊）</span></label>
+            <label class="checkbox-line"><input type="radio" name="knowledgeImportScope" value="groups" /><span data-i18n="knowledgeImportScopeGroups">指定的群</span></label>
+            <div id="knowledgeImportGroupPicker" class="stack" hidden>
+              <div id="knowledgeImportGroups" class="chip-row"></div>
+              <label class="field"><span data-i18n="knowledgeImportExtraGroups">其他群号</span><input id="knowledgeImportExtraGroups" autocomplete="off" inputmode="numeric" placeholder="多个群号用逗号分隔" data-i18n-placeholder="knowledgeImportExtraGroupsHint" /></label>
+            </div>
+          </fieldset>
+        </div>
+        <div class="modal-actions"><button class="button ghost" type="button" data-close-knowledge-import data-i18n="cancel">取消</button><button id="saveKnowledgeImport" class="button primary" type="submit" disabled data-i18n="knowledgeImportConfirm">导入所选</button></div>
       </form>
     </dialog>
 

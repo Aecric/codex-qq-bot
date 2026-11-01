@@ -114,7 +114,7 @@ Both engines support [host access requests per command](docs/OPERATIONS.md#reque
 - **Learning how people talk**: it tracks pacing, reply length, emoji and punctuation habits, and periodically has the main model compare the bot's style with real members and adjust its rules.
 - **Management from QQ**: switch models, change reasoning effort, edit the allowlist and permissions, mute, manage groups, handle friend and join requests, post to Qzone. The owner can appoint bot administrators, who cannot appoint others or make the model run destructive file operations.
 - **Manual tasks**: send `/AI任务` in QQ or run `ncc ai-run` to run a chat summary, style review, persona refresh or knowledge review right away.
-- **Dashboard**: open `http://127.0.0.1:3789/` for status, channels, memory, the knowledge base and logs. Its Intelligence page adjusts proactive groups, the watch window after an @, reply scrubbing, session rotation, the Codex quota saver and idle-based interest provider switching, and saving applies them at once. There is also a native macOS wrapper.
+- **Dashboard**: open `http://127.0.0.1:3789/` for status, channels, memory, the knowledge base and logs. Its Intelligence page edits or uploads the character card and adjusts proactive groups, the watch window after an @, reply scrubbing, session rotation, the Codex quota saver and idle-based interest provider switching, and saving applies them at once. Its Knowledge page backs up and restores knowledge and slang as a ZIP, or offers a template with a README for adding in bulk, and an import can apply globally or to chosen groups. There is also a native macOS wrapper.
 
 See [features](docs/FEATURES.md) for the full description.
 

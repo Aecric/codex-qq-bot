@@ -594,6 +594,22 @@ select { appearance: none; padding-right: 30px; background-image: linear-gradien
 .toggle-card strong { font-size: 13px; }
 .toggle-card small { color: var(--muted); font-size: 12px; line-height: 1.45; }
 .tuning-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; }
+.character-card-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.character-card-actions { display: flex; gap: 8px; margin-left: auto; }
+.over-limit { color: var(--bad-text); font-weight: 600; }
+.knowledge-import-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.knowledge-import-list { display: grid; gap: 6px; max-height: 280px; overflow-y: auto; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.knowledge-import-row { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.knowledge-import-row > input { flex: none; width: auto; margin-top: 3px; }
+.knowledge-import-copy { display: grid; gap: 2px; min-width: 0; }
+.knowledge-import-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; overflow-wrap: anywhere; }
+.knowledge-import-copy small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.knowledge-import-scope { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.knowledge-import-scope legend { padding: 0 4px; color: var(--text-2); font-size: 13px; font-weight: 600; }
+.checkbox-line { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.checkbox-line[hidden] { display: none; }
+.checkbox-line input, .checkbox-chip input { flex: none; width: auto; }
+.checkbox-chip { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .bot-group-title { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-2); font-size: 13px; font-weight: 600; }
 .field-hint { color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.45; }
 .form-actions { display: flex; justify-content: flex-end; }

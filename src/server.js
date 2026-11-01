@@ -438,6 +438,17 @@ import { createWebSearch, formatWebSearchProviderName } from "./web-search.js";
 import { isSupportedImageContentType, readResponseJson, writeResponseBodyToFile } from "./bounded-stream.js";
 import { runJsonProcess } from "./process-runner.js";
 import { createDashboardAssetHandler } from "./dashboard-assets.js";
+import { createAssistantProfileStore, fitAssistantProfile } from "./dashboard-character-card.js";
+import {
+  applyKnowledgeImport,
+  buildKnowledgeBackupArchive,
+  buildKnowledgeTemplateArchive,
+  knowledgeImportMaxBytes,
+  normalizeKnowledgeImportScope,
+  parseKnowledgeUpload,
+  prepareKnowledgeImportImages,
+  summarizeKnowledgeImportItems
+} from "./knowledge-package.js";
 import { applyDashboardBotSettings, normalizeQqBehaviorSettings, readDashboardBotSettings } from "./dashboard-bot-settings.js";
 import { selectLanAccessAddresses } from "./network-access.js";
 import { createPublicTunnelManager } from "./public-tunnel.js";
@@ -519,6 +530,12 @@ const {
   assistantProfilePath
 } = createRuntimePaths({ projectDir });
 const settingsRepository = createSettingsRepository({ filePath: settingsPath });
+// The dashboard's card editor needs somewhere to save on a deployment that has
+// not pointed the environment variable at its own file.
+const assistantProfileStore = createAssistantProfileStore({
+  filePath: assistantProfilePath || join(projectDir, "config", "characters", "assistant-profile.md")
+});
+let assistantProfileTruncationLogged = false;
 const {
   logMaxBytes,
   logMaxFiles,
@@ -10001,16 +10018,21 @@ async function buildAssistantInstructions(event) {
 }
 
 async function loadAssistantSkillBrief() {
-  // Deployment customization: this release build has no baked-in style. Put
-  // custom style rules in CODEX_REMOTE_CONTACT_ASSISTANT_PROFILE_PATH.
-  const text = assistantProfilePath ? await readFile(assistantProfilePath, "utf8").catch(() => "") : "";
-  if (!text) {
+  // Deployment customization: this release build has no baked-in style. Custom
+  // style rules live in the dashboard's character card, which is the file at
+  // CODEX_REMOTE_CONTACT_ASSISTANT_PROFILE_PATH when that is set.
+  const { content, truncated } = fitAssistantProfile(await assistantProfileStore.read().catch(() => ""));
+  if (!content) {
     return "未配置额外 profile；使用上面的通用 QQ 助手语气。";
+  }
+  if (truncated && !assistantProfileTruncationLogged) {
+    assistantProfileTruncationLogged = true;
+    logger.warn("Character card is over the limit and was cut", { maxChars: assistantProfileStore.maxChars }, "qq");
   }
   return [
     "部署者自定义 profile：",
-    text
-  ].join("\n").slice(0, 1800);
+    content
+  ].join("\n");
 }
 
 function extractSection(text, startMarker, endMarker) {
@@ -13335,6 +13357,19 @@ function getQqTaskPleadingKey(event) {
   return `${getQqMemoryScopeId(event) || ""}:${event?.senderId || ""}`;
 }
 
+function sendZipDownload(res, archive, fileName, headers = {}) {
+  res.writeHead(200, {
+    "content-type": "application/zip",
+    "content-length": archive.length,
+    "content-disposition": `attachment; filename="${fileName}"`,
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    ...headers
+  });
+  res.end(archive);
+  return true;
+}
+
 function isQqProactiveGroup(groupId) {
   const groupIds = state.qq.behavior.proactiveGroupIds;
   return groupIds.length === 0 || groupIds.includes(String(groupId || ""));
@@ -14753,6 +14788,110 @@ async function handleApi(req, res) {
     });
     res.end(image.data);
     return true;
+  }
+
+  if (req.method === "GET" && req.url === "/api/qq/character-card") {
+    return sendJson(res, 200, {
+      ...await assistantProfileStore.readSummary(),
+      fileName: basename(assistantProfileStore.filePath)
+    });
+  }
+
+  if (req.method === "POST" && req.url === "/api/qq/character-card") {
+    const body = await readBody(req, { requireJson: true });
+    let summary;
+    try {
+      summary = await assistantProfileStore.save(body.content);
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) return sendJson(res, 400, { error: error.message });
+      throw error;
+    }
+    assistantProfileTruncationLogged = false;
+    logger.info("Dashboard character card updated", { source: "dashboard", outcome: "persisted", chars: summary.chars }, "qq");
+    return sendJson(res, 200, { ...summary, fileName: basename(assistantProfileStore.filePath) });
+  }
+
+  if (req.method === "GET" && req.url === "/api/qq/knowledge/template") {
+    return sendZipDownload(res, buildKnowledgeTemplateArchive(), "knowledge-template.zip");
+  }
+
+  if (req.method === "GET" && req.url === "/api/qq/knowledge/export") {
+    const backup = await buildKnowledgeBackupArchive(state.qq.knowledgeBase, {
+      readImage: (id) => qqMemoryImageStore.read(id)
+    });
+    logger.info("Dashboard QQ knowledge exported", {
+      source: "dashboard",
+      outcome: "exported",
+      entries: backup.entries,
+      images: backup.images,
+      omittedImages: backup.omittedImages
+    }, "memory");
+    const day = new Date().toISOString().slice(0, 10);
+    return sendZipDownload(res, backup.archive, `knowledge-backup-${day}.zip`, {
+      "x-knowledge-omitted-images": String(backup.omittedImages)
+    });
+  }
+
+  if (req.method === "POST" && req.url === "/api/qq/knowledge/import") {
+    if (!qqKnowledgeBaseRepository.writable) {
+      return sendJson(res, 409, {
+        error: "QQ knowledge base is read-only because its persisted file did not load safely"
+      });
+    }
+    const body = await readBody(req, { requireJson: true, maxBytes: Math.ceil(knowledgeImportMaxBytes * 4 / 3) + 64 * 1024 });
+    let parsed;
+    let items;
+    let scope;
+    try {
+      const data = Buffer.from(String(body.data || ""), "base64");
+      if (data.length > knowledgeImportMaxBytes) throw new RangeError("import file is too large");
+      parsed = parseKnowledgeUpload({ fileName: String(body.fileName || ""), data, defaultKind: body.defaultKind });
+      if (body.dryRun === true) {
+        return sendJson(res, 200, {
+          format: parsed.format,
+          items: summarizeKnowledgeImportItems(state.qq.knowledgeBase, parsed.items),
+          warnings: parsed.warnings
+        });
+      }
+      scope = normalizeKnowledgeImportScope(body.scope);
+      const selected = Array.isArray(body.selected) ? new Set(body.selected.map(Number)) : null;
+      items = selected ? parsed.items.filter((_, index) => selected.has(index)) : parsed.items;
+      if (items.length === 0) throw new RangeError("choose at least one entry to import");
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) return sendJson(res, 400, { error: error.message });
+      throw error;
+    }
+    const images = await prepareKnowledgeImportImages(items, (data) => qqMemoryImageStore.importBuffer(data));
+    let result;
+    try {
+      result = applyKnowledgeImport(state.qq.knowledgeBase, items, scope, { storedImages: images.stored });
+    } catch (error) {
+      if (error instanceof DashboardKnowledgeConflictError) return sendJson(res, 409, { error: error.message });
+      if (error instanceof TypeError || error instanceof RangeError) return sendJson(res, 400, { error: error.message });
+      throw error;
+    }
+    const previousStore = state.qq.knowledgeBase;
+    state.qq.knowledgeBase = result.store;
+    try {
+      await saveQqKnowledgeBase();
+    } catch (error) {
+      state.qq.knowledgeBase = previousStore;
+      throw error;
+    }
+    logger.info("Dashboard QQ knowledge imported", {
+      source: "dashboard",
+      outcome: "persisted",
+      format: parsed.format,
+      scope: scope.mode,
+      groups: scope.groupIds?.length || 0,
+      imagesFailed: images.failed,
+      ...result.counts
+    }, "memory");
+    return sendJson(res, 200, {
+      ...await buildMemorySnapshot(),
+      mutation: result.mutation,
+      imported: { ...result.counts, imagesFailed: images.failed }
+    });
   }
 
   if (req.method === "POST" && req.url === "/api/qq/knowledge/images") {

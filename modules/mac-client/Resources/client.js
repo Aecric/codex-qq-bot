@@ -64,6 +64,10 @@ const translations = {
     quotaSaverBelow: "低于此剩余进入（%）", quotaSaverBelowHint: "5 小时窗口剩余低于它时改用省电模型和 low 思考，并换新线程；0 关闭。", quotaSaverResume: "回到此剩余退出（%）", quotaSaverResumeHint: "必须大于进入阈值；窗口重置时也会退出。", quotaSaverModel: "省电模型", quotaSaverModelHint: "下次进入省电模式时使用。",
     idleSwitchFeature: "按闲置切换服务", idleSwitchHint: "仅 macOS：按主人是否在用电脑选择服务；开启后上方的模型服务由它接管。", idleAfter: "闲置阈值（秒）", idleAfterHint: "闲置这么久后切到闲置服务，60–86400。", idleActiveProvider: "使用中服务", idleActiveProviderHint: "主人在用电脑时使用，取该服务默认模型。", idleIdleProvider: "闲置时服务", idleIdleProviderHint: "电脑闲置时使用，取该服务默认模型。",
     diagQuotaSaverActive: "省电模式：进行中", diagQuotaSaverIdle: "省电模式：待命", diagQuotaSaverOff: "省电模式：关闭", diagIdleSwitch: "自动切换：{active} / {idle}", diagEngagedGroups: "观察中的群：{value}", diagGeminiReady: "Gemini：{value}", diagGeminiMissing: "Gemini Key 未配置", diagOllama: "Ollama：{value}",
+    characterCard: "角色卡", characterCardHint: "Bot 的身份和说话方式，每次回复都会带上，下一条回复起生效。世界观等资料放到知识库更省上下文。", characterCardPlaceholder: "# 角色卡", characterCardUpload: "上传文件", characterCardSave: "保存角色卡", characterCardSaved: "角色卡已保存", characterCardCount: "{chars} / {max} 字符", characterCardFile: "文件：{value}", characterCardTooLong: "角色卡超过 {max} 字符，请先精简", characterCardReplace: "用文件 {value} 替换编辑框里的内容？保存后才会生效。",
+    knowledgeTemplate: "下载模板", knowledgeExport: "导出备份", knowledgeImport: "导入", knowledgeExported: "备份已导出", knowledgeExportedPartial: "备份已导出，但有 {value} 张配图因体积过大或无法读取而未包含", knowledgeImportTitle: "导入知识库", knowledgeImportFile: "文件", knowledgeImportDefaultKind: "单个文本文件的类型", knowledgeImportHint: "支持 ZIP 包和 .md、.txt 文件，不超过 32 MB。ZIP 包按 notes.md、slang.md 分类，写法见模板里的 README。", knowledgeImportSelectAll: "全选", knowledgeImportScope: "应用到", knowledgeImportScopeKeep: "保留备份里的范围", knowledgeImportScopeGlobal: "全局（所有群和私聊）", knowledgeImportScopeGroups: "指定的群", knowledgeImportExtraGroups: "其他群号", knowledgeImportExtraGroupsHint: "多个群号用逗号分隔", knowledgeImportConfirm: "导入所选",
+    knowledgeImportSummary: "共 {total} 条：知识 {notes}，黑话 {slang}", knowledgeImportExists: "已存在", knowledgeImportImages: "{value} 张配图", knowledgeImportTooLarge: "文件超过 32 MB", knowledgeImportNoGroups: "请至少选择一个群", knowledgeImportNoneSelected: "请至少勾选一条", knowledgeImportDone: "导入完成：新增 {created}，更新 {updated}，未变 {unchanged}", knowledgeImportDoneImages: "，配图 {images}", knowledgeImportImagesFailed: "，{value} 张配图未能导入",
+    knowledgeImportWarnSplit: "“{title}”过长，拆成 {parts} 条", knowledgeImportWarnCut: "“{title}”过长，内容被截断", knowledgeImportWarnTitleCut: "标题过长被截断：{title}", knowledgeImportWarnSkipped: "已跳过无法识别的内容：{title}", knowledgeImportWarnImage: "“{title}”的配图在压缩包中缺失", scopeGlobalShort: "全局", scopeGroupShort: "群 {value}", scopeMemberShort: "成员 {value}",
     judgeEveryMessages: "消息间隔", judgeEveryMinutes: "分钟间隔", judgeProvider: "模型服务", judgeProviderCustom: "自定义兼容服务", judgeModel: "判定模型", judgeTimeout: "静默超时（ms）", judgeRecentMessages: "最近上下文", saveBotSettings: "保存 Bot 设置", botSettingsSaved: "Bot 设置已保存", waitingBotSettings: "等待 Bot 设置",
     diagEngine: "引擎：{value}", diagJudgeProvider: "判定服务：{value}", diagJudgeKeyReady: "判定 Key 已配置", diagJudgeKeyMissing: "判定 Key 未配置", diagSearchProvider: "搜索：{value}", diagSafeFetch: "安全下载：{value}", safeFetchProxy: "代理兼容", safeFetchStrict: "严格", diagActiveGeneration: "生成中：{value}", diagPendingReplies: "待回复：{value}",
     selfPersona: "Bot 全局人设", selfPersonaHint: "从各群和私聊的匿名摘要生成；QQ 昵称固定作为名字。", viewDetailedLogs: "查看日志",
@@ -147,6 +151,10 @@ const translations = {
     quotaSaverBelow: "Enter below remaining (%)", quotaSaverBelowHint: "Below this share of the 5-hour window, replies use the saver model at low effort in new threads; 0 turns it off.", quotaSaverResume: "Leave at remaining (%)", quotaSaverResumeHint: "Must be above the entry threshold; a window reset also leaves saver mode.", quotaSaverModel: "Saver model", quotaSaverModelHint: "Used the next time saver mode starts.",
     idleSwitchFeature: "Switch provider when idle", idleSwitchHint: "macOS only: picks the provider by whether the owner is at the computer, and takes over the provider above.", idleAfter: "Idle threshold (seconds)", idleAfterHint: "Moves to the idle provider after this long, 60–86400.", idleActiveProvider: "Provider while in use", idleActiveProviderHint: "Used while the owner is at the computer, with its default model.", idleIdleProvider: "Provider when idle", idleIdleProviderHint: "Used while the computer is idle, with its default model.",
     diagQuotaSaverActive: "Saver mode: active", diagQuotaSaverIdle: "Saver mode: standing by", diagQuotaSaverOff: "Saver mode: off", diagIdleSwitch: "Auto switch: {active} / {idle}", diagEngagedGroups: "Groups watched: {value}", diagGeminiReady: "Gemini: {value}", diagGeminiMissing: "Gemini key missing", diagOllama: "Ollama: {value}",
+    characterCard: "Character card", characterCardHint: "The Bot's identity and voice. Sent with every reply and used from the next reply on. Lore costs less context in the knowledge base.", characterCardPlaceholder: "# Character card", characterCardUpload: "Upload file", characterCardSave: "Save card", characterCardSaved: "Character card saved", characterCardCount: "{chars} / {max} characters", characterCardFile: "File: {value}", characterCardTooLong: "The card is over {max} characters; shorten it first", characterCardReplace: "Replace the editor's text with {value}? Nothing changes until you save.",
+    knowledgeTemplate: "Template", knowledgeExport: "Export backup", knowledgeImport: "Import", knowledgeExported: "Backup exported", knowledgeExportedPartial: "Backup exported, but {value} images were too large or unreadable and were left out", knowledgeImportTitle: "Import knowledge", knowledgeImportFile: "File", knowledgeImportDefaultKind: "Type for a single text file", knowledgeImportHint: "ZIP packages and .md or .txt files up to 32 MB. ZIP packages sort by notes.md and slang.md; the template's README shows the format.", knowledgeImportSelectAll: "Select all", knowledgeImportScope: "Apply to", knowledgeImportScopeKeep: "Keep the backup's scopes", knowledgeImportScopeGlobal: "Global (all groups and private chats)", knowledgeImportScopeGroups: "Chosen groups", knowledgeImportExtraGroups: "Other group numbers", knowledgeImportExtraGroupsHint: "Separate group numbers with commas", knowledgeImportConfirm: "Import selected",
+    knowledgeImportSummary: "{total} entries: {notes} knowledge, {slang} slang", knowledgeImportExists: "Exists", knowledgeImportImages: "{value} images", knowledgeImportTooLarge: "The file is over 32 MB", knowledgeImportNoGroups: "Choose at least one group", knowledgeImportNoneSelected: "Select at least one entry", knowledgeImportDone: "Imported: {created} new, {updated} updated, {unchanged} unchanged", knowledgeImportDoneImages: ", {images} images", knowledgeImportImagesFailed: ", {value} images could not be imported",
+    knowledgeImportWarnSplit: "\"{title}\" is long and became {parts} entries", knowledgeImportWarnCut: "\"{title}\" is long and its content was cut", knowledgeImportWarnTitleCut: "Long title was cut: {title}", knowledgeImportWarnSkipped: "Skipped unrecognized content: {title}", knowledgeImportWarnImage: "A picture for \"{title}\" is missing from the archive", scopeGlobalShort: "Global", scopeGroupShort: "Group {value}", scopeMemberShort: "Member {value}",
     judgeEveryMessages: "Message interval", judgeEveryMinutes: "Minute interval", judgeProvider: "Provider", judgeProviderCustom: "Custom compatible service", judgeModel: "Judge model", judgeTimeout: "Idle timeout (ms)", judgeRecentMessages: "Recent context", saveBotSettings: "Save Bot settings", botSettingsSaved: "Bot settings saved", waitingBotSettings: "Waiting for Bot settings",
     diagEngine: "Engine: {value}", diagJudgeProvider: "Judge: {value}", diagJudgeKeyReady: "Judge key configured", diagJudgeKeyMissing: "Judge key missing", diagSearchProvider: "Search: {value}", diagSafeFetch: "Safe downloads: {value}", safeFetchProxy: "proxy-compatible", safeFetchStrict: "strict", diagActiveGeneration: "Generating: {value}", diagPendingReplies: "Pending replies: {value}",
     selfPersona: "Global Bot persona", selfPersonaHint: "Generated from anonymous group and private summaries; the QQ nickname stays the name.", viewDetailedLogs: "View logs",
@@ -691,6 +699,7 @@ async function refreshView({ quiet = false } = {}) {
   // The engine identity lives in maintenance, so every view keeps it fresh.
   tasks.push(refreshMaintenance({ quiet }));
   if (["memory", "knowledge"].includes(app.view)) tasks.push(refreshMemory({ quiet }));
+  if (app.view === "intelligence") tasks.push(refreshCharacterCard());
   if (app.view === "activity") tasks.push(refreshLogs({ quiet }));
   await Promise.allSettled(tasks);
 }
@@ -1856,6 +1865,216 @@ function previewKnowledgeImageFile(file) {
   preview.replaceChildren(image);
 }
 
+const KNOWLEDGE_IMPORT_MAX_BYTES = 32 * 1024 * 1024;
+const characterCard = { loaded: false, dirty: false, maxChars: 0, fileName: "" };
+let knowledgeImport = null;
+
+async function refreshCharacterCard() {
+  if (characterCard.dirty) return;
+  try {
+    const card = await api("/api/qq/character-card", {}, { key: "character-card" });
+    if (characterCard.dirty) return;
+    Object.assign(characterCard, { loaded: true, maxChars: card.maxChars, fileName: card.fileName });
+    $("#characterCardContent").value = card.content;
+    renderCharacterCard();
+  } catch (error) {
+    if (error.name !== "AbortError") setBotCardStatus("error", "settingsSaveFailed");
+  }
+}
+
+function setBotCardStatus(status, messageKey) {
+  const node = $("#characterCardStatus");
+  node.className = `save-state ${status === "ok" ? "" : status}`;
+  node.textContent = t(messageKey);
+}
+
+function renderCharacterCard() {
+  const chars = $("#characterCardContent").value.trim().length;
+  const over = characterCard.maxChars > 0 && chars > characterCard.maxChars;
+  const count = $("#characterCardCount");
+  count.textContent = t("characterCardCount", { chars, max: characterCard.maxChars || "-" });
+  count.classList.toggle("over-limit", over);
+  $("#characterCardFile").textContent = t("characterCardFile", { value: characterCard.fileName || "-" });
+  $("#saveCharacterCard").disabled = !characterCard.loaded || over;
+  setBotCardStatus(characterCard.dirty ? "dirty" : "ok", characterCard.dirty ? "settingsUnsaved" : "settingsSynced");
+}
+
+function markCharacterCardDirty() {
+  characterCard.dirty = true;
+  renderCharacterCard();
+}
+
+async function saveCharacterCard(control) {
+  setBotCardStatus("saving", "settingsSaving");
+  try {
+    const card = await mutate(() => api("/api/qq/character-card", {
+      method: "POST",
+      body: JSON.stringify({ content: $("#characterCardContent").value })
+    }), { control, success: t("characterCardSaved") });
+    characterCard.dirty = false;
+    Object.assign(characterCard, { loaded: true, maxChars: card.maxChars, fileName: card.fileName });
+    $("#characterCardContent").value = card.content;
+  } catch {
+    setBotCardStatus("error", "settingsSaveFailed");
+    return;
+  }
+  renderCharacterCard();
+}
+
+async function uploadCharacterCardFile(file) {
+  if (!file) return;
+  const text = await file.text();
+  if ($("#characterCardContent").value.trim() && !window.confirm(t("characterCardReplace", { value: file.name }))) return;
+  $("#characterCardContent").value = text;
+  markCharacterCardDirty();
+}
+
+async function downloadHubFile(path, fallbackName) {
+  const headers = new Headers();
+  if (app.apiToken) headers.set("authorization", `Bearer ${app.apiToken}`);
+  const response = await fetch(`${HUB}${path}`, { headers, credentials: "same-origin" });
+  if (!response.ok) throw new Error(`${t("requestFailed")} (${response.status})`);
+  const fileName = (response.headers.get("content-disposition") || "").match(/filename="([^"]+)"/)?.[1] || fallbackName;
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return response;
+}
+
+async function exportKnowledge(control, path, fallbackName, describe) {
+  control.disabled = true;
+  try {
+    const response = await downloadHubFile(path, fallbackName);
+    if (describe) {
+      const omitted = Number(response.headers.get("x-knowledge-omitted-images")) || 0;
+      showToast(t(omitted ? "knowledgeExportedPartial" : "knowledgeExported", { value: omitted }), omitted ? "warn" : "success");
+    }
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    control.disabled = false;
+  }
+}
+
+function openKnowledgeImport() {
+  knowledgeImport = null;
+  $("#knowledgeImportForm").reset();
+  $("#knowledgeImportReview").hidden = true;
+  $("#saveKnowledgeImport").disabled = true;
+  renderKnowledgeImportGroups();
+  syncKnowledgeImportScope();
+  $("#knowledgeImportDialog").showModal();
+}
+
+function renderKnowledgeImportGroups() {
+  setHtml($("#knowledgeImportGroups"), (app.state?.qq?.allowedGroups || []).map((id) => `<label class="chip checkbox-chip">
+    <input type="checkbox" value="${escapeHtml(id)}" data-import-group /><span>${escapeHtml(id)}</span>
+  </label>`).join(""));
+}
+
+function syncKnowledgeImportScope() {
+  const mode = $("#knowledgeImportForm").elements.knowledgeImportScope.value;
+  $("#knowledgeImportGroupPicker").hidden = mode !== "groups";
+}
+
+function describeKnowledgeImportScope(scope) {
+  if (!scope?.type) return "";
+  if (scope.type === "global") return t("scopeGlobalShort");
+  if (scope.type === "group") return t("scopeGroupShort", { value: scope.groupName || scope.groupId });
+  return t("scopeMemberShort", { value: scope.userName || scope.userId });
+}
+
+function describeKnowledgeImportWarning(warning) {
+  const key = { split: "knowledgeImportWarnSplit", content_cut: "knowledgeImportWarnCut", title_cut: "knowledgeImportWarnTitleCut", skipped: "knowledgeImportWarnSkipped", image_missing: "knowledgeImportWarnImage" }[warning.code];
+  return key ? t(key, { title: warning.title, parts: warning.parts }) : "";
+}
+
+function renderKnowledgeImportReview(preview) {
+  const notes = preview.items.filter((item) => item.kind === "note").length;
+  $("#knowledgeImportSummary").textContent = t("knowledgeImportSummary", { total: preview.items.length, notes, slang: preview.items.length - notes });
+  setHtml($("#knowledgeImportWarnings"), preview.warnings.slice(0, 20).map((warning) => `<span class="chip warn">${escapeHtml(describeKnowledgeImportWarning(warning))}</span>`).join(""));
+  setHtml($("#knowledgeImportList"), preview.items.map((item) => `<label class="knowledge-import-row">
+    <input type="checkbox" checked value="${item.index}" data-import-item />
+    <span class="knowledge-import-copy">
+      <span class="knowledge-import-title"><span class="chip">${escapeHtml(t(item.kind === "slang" ? "knowledgeKindSlang" : "knowledgeKindNote"))}</span><strong>${escapeHtml(item.title)}</strong>${item.exists ? `<span class="chip warn">${escapeHtml(t("knowledgeImportExists"))}</span>` : ""}${item.scope ? `<span class="chip">${escapeHtml(describeKnowledgeImportScope(item.scope))}</span>` : ""}${item.imageCount ? `<span class="chip">${escapeHtml(t("knowledgeImportImages", { value: item.imageCount }))}</span>` : ""}</span>
+      <small>${escapeHtml(item.content)}</small>
+    </span>
+  </label>`).join(""));
+  const isBackup = preview.format === "backup";
+  $("#knowledgeImportKeepOption").hidden = !isBackup;
+  $("#knowledgeImportForm").elements.knowledgeImportScope.value = isBackup ? "keep" : "global";
+  $("#knowledgeImportAll").checked = true;
+  syncKnowledgeImportScope();
+  $("#knowledgeImportReview").hidden = false;
+  $("#saveKnowledgeImport").disabled = false;
+}
+
+async function previewKnowledgeImport() {
+  const file = $("#knowledgeImportFile").files?.[0] || null;
+  knowledgeImport = null;
+  $("#knowledgeImportReview").hidden = true;
+  $("#saveKnowledgeImport").disabled = true;
+  if (!file) return;
+  if (file.size > KNOWLEDGE_IMPORT_MAX_BYTES) {
+    showToast(t("knowledgeImportTooLarge"), "error");
+    return;
+  }
+  try {
+    const data = (await readFileAsDataUrl(file)).split(",")[1] || "";
+    const request = { fileName: file.name, data, defaultKind: $("#knowledgeImportDefaultKind").value };
+    const preview = await api("/api/qq/knowledge/import", { method: "POST", body: JSON.stringify({ ...request, dryRun: true }) }, { key: "knowledge-import" });
+    knowledgeImport = { request, preview };
+    renderKnowledgeImportReview(preview);
+  } catch (error) {
+    if (error.name !== "AbortError") showToast(error.message, "error");
+  }
+}
+
+function collectKnowledgeImportScope() {
+  const mode = $("#knowledgeImportForm").elements.knowledgeImportScope.value;
+  if (mode !== "groups") return { mode };
+  const groupIds = [
+    ...$$("[data-import-group]:checked", $("#knowledgeImportGroups")).map((input) => input.value),
+    ...$("#knowledgeImportExtraGroups").value.split(/[\s,，]+/).filter(Boolean)
+  ];
+  return { mode, groupIds };
+}
+
+async function submitKnowledgeImport(control) {
+  if (!knowledgeImport) return;
+  const selected = $$("[data-import-item]:checked", $("#knowledgeImportList")).map((input) => Number(input.value));
+  if (!selected.length) {
+    showToast(t("knowledgeImportNoneSelected"), "error");
+    return;
+  }
+  const scope = collectKnowledgeImportScope();
+  if (scope.mode === "groups" && !scope.groupIds.length) {
+    showToast(t("knowledgeImportNoGroups"), "error");
+    return;
+  }
+  control.disabled = true;
+  try {
+    const response = await api("/api/qq/knowledge/import", { method: "POST", body: JSON.stringify({ ...knowledgeImport.request, selected, scope }) });
+    app.memory = response;
+    const { imported } = response;
+    let message = t("knowledgeImportDone", imported);
+    if (imported.images) message += t("knowledgeImportDoneImages", imported);
+    if (imported.imagesFailed) message += t("knowledgeImportImagesFailed", { value: imported.imagesFailed });
+    showToast(message, imported.imagesFailed ? "warn" : "success");
+    $("#knowledgeImportDialog").close();
+    renderKnowledge();
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    control.disabled = false;
+  }
+}
+
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -2633,6 +2852,33 @@ $$("[data-close-knowledge-editor]").forEach((button) => button.addEventListener(
 $("#knowledgeImageDialog").addEventListener("click", (event) => { if (event.target === event.currentTarget) event.currentTarget.close(); });
 $$("[data-close-knowledge-image]").forEach((button) => button.addEventListener("click", () => $("#knowledgeImageDialog").close()));
 $("#knowledgeImageFile").addEventListener("change", (event) => previewKnowledgeImageFile(event.target.files?.[0] || null));
+$("#characterCardContent").addEventListener("input", markCharacterCardDirty);
+$("#characterCardForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await saveCharacterCard(event.submitter);
+});
+$("#characterCardUploadButton").addEventListener("click", () => $("#characterCardUpload").click());
+$("#characterCardUpload").addEventListener("change", async (event) => {
+  await uploadCharacterCardFile(event.target.files?.[0] || null);
+  event.target.value = "";
+});
+$("#knowledgeTemplate").addEventListener("click", (event) => exportKnowledge(event.currentTarget, "/api/qq/knowledge/template", "knowledge-template.zip", false));
+$("#knowledgeExport").addEventListener("click", (event) => exportKnowledge(event.currentTarget, "/api/qq/knowledge/export", "knowledge-backup.zip", true));
+$("#knowledgeImport").addEventListener("click", openKnowledgeImport);
+$("#knowledgeImportFile").addEventListener("change", previewKnowledgeImport);
+$("#knowledgeImportDefaultKind").addEventListener("change", previewKnowledgeImport);
+$("#knowledgeImportAll").addEventListener("change", (event) => {
+  $$("[data-import-item]", $("#knowledgeImportList")).forEach((input) => { input.checked = event.target.checked; });
+});
+$("#knowledgeImportForm").addEventListener("change", (event) => {
+  if (event.target.name === "knowledgeImportScope") syncKnowledgeImportScope();
+});
+$("#knowledgeImportForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await submitKnowledgeImport(event.submitter);
+});
+$("#knowledgeImportDialog").addEventListener("click", (event) => { if (event.target === event.currentTarget) event.currentTarget.close(); });
+$$("[data-close-knowledge-import]").forEach((button) => button.addEventListener("click", () => $("#knowledgeImportDialog").close()));
 $("#knowledgeImageForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   await submitKnowledgeImage(event.submitter);

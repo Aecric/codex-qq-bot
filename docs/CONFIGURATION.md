@@ -295,6 +295,20 @@ Self-persona thresholds use `CODEX_REMOTE_CONTACT_QQ_SELF_PERSONA_*`; account st
 
 Switch providers from Intelligence in the dashboard or with the owner command `/兴趣厂商 openrouter|deepseek|custom|codex|ollama`; `/兴趣模型 model-id` overrides the provider default. Credentials remain environment-only and are never persisted to `data/settings.json`. OpenRouter uses strict JSON Schema, while DeepSeek and custom compatible services use JSON Object mode. `codex` needs no key: each judgment is a tool-free, low-effort turn on the local Codex login (default model `gpt-6-luna`) that shares the Codex queue with replies. `ollama` needs no key either: it calls the local Ollama daemon (default model `gemma4:e4b-it-qat`, a 4-bit build that holds about 4GB; the unquantized build holds about 10GB and pushes NapCat into swap on a 16GB machine) with thinking turned off (a short `low` pass only when pictures are attached, which a small model otherwise misreads) and `keep_alive: -1`, so the model stays loaded and each judgment returns in a few seconds; pull the model first with `ollama pull gemma4:e4b-it-qat`. Run `npm run ncc -- search-config` to initialize the repository environment. Diagnose `/api/maintenance` and the `search` / `interest` logs before editing prompts.
 
+### Character card
+
+The dashboard's Intelligence page edits or uploads the character card (`.md`, `.txt`). Saving applies from the next reply, with no restart. It is stored in the file named by `CODEX_REMOTE_CONTACT_ASSISTANT_PROFILE_PATH`, or `config/characters/assistant-profile.md` when that is unset, and the previous version stays beside it as `<file>.bak`. A card holds 6000 characters: the dashboard refuses to save more, and a hand-edited file over that uses its first 6000 characters and logs a warning. The card goes with every turn, so keep lore that only matters when it comes up in the knowledge base.
+
+### Knowledge import and export
+
+The dashboard's Knowledge page has three actions:
+
+- **Template**: a ZIP with `README.md`, `notes.md` (knowledge) and `slang.md` (slang). Each heading is one entry, and the first line under it may be `Aliases: a, b`. `slang.md` also takes one `term: meaning` per line.
+- **Export backup**: a ZIP with `README.md`, `knowledge.json` and `images/`, keeping each entry's type, aliases, scope and pictures. Backups can contain chat content and group and QQ numbers, so keep them private. Pictures past 24 MiB in total are left out, and the page says how many.
+- **Import**: takes ZIP, `.md` and `.txt` files up to 32 MiB. Review the entries, select them, then apply globally or to chosen groups; a backup can also keep its original scopes.
+
+Importing adds or updates and never deletes; the same title in the same scope is overwritten. Titles hold 80 characters and content 800: longer knowledge splits into `Title（2）` and longer slang is cut, and the preview says so. The knowledge base holds 500 entries, and an import that goes past that changes nothing. The endpoints are `GET /api/qq/knowledge/template`, `GET /api/qq/knowledge/export` and `POST /api/qq/knowledge/import`.
+
 ### Logs
 
 - The Hub has one QQ/OneBot message transport. Legacy `CODEX_REMOTE_CONTACT_IMESSAGE_*` and `CODEX_REMOTE_CONTACT_REMOTE_EXECUTION_*` variables are ignored.
