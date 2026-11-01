@@ -1,3 +1,4 @@
+import { normalizeQqBehaviorSettings } from "../dashboard-bot-settings.js";
 import { createEmptyQqConversationMemory } from "../qq-conversation-memory.js";
 import { createEmptyQqKnowledgeBase } from "../qq-knowledge-base.js";
 import { createEmptyQqPeriodicRuntime } from "../qq-periodic-runtime.js";
@@ -46,6 +47,23 @@ export function createInitialState({
       webLookup: {
         enabled: config.qqWebLookupEnabled
       },
+      behavior: normalizeQqBehaviorSettings({
+        selfPersonaGenerationEnabled: config.qqSelfPersonaGenerationEnabled,
+        replyScrubEnabled: config.qqReplyScrubEnabled,
+        proactiveGroupIds: config.qqProactiveGroupIds,
+        engagedWindowMessages: config.qqEngagedWindowMessages,
+        stickerMinChance: config.qqStickerMinChance,
+        taskPleadingAsks: config.qqTaskPleadingAsks,
+        sessionRotateHours: config.qqSessionRotateHours,
+        sessionRotateReplies: config.qqSessionRotateReplies,
+        quotaSaverBelow: config.qqQuotaSaverBelow,
+        quotaSaverResumeAt: config.qqQuotaSaverResumeAt,
+        quotaSaverModel: config.qqQuotaSaverModel,
+        judgeIdleSwitchEnabled: config.qqJudgeIdleSwitchEnabled,
+        judgeIdleAfterSeconds: config.qqJudgeIdleSwitchAfterSeconds,
+        judgeActiveProvider: config.qqJudgeIdleSwitchActiveProvider,
+        judgeIdleProvider: config.qqJudgeIdleSwitchIdleProvider
+      }),
       proactive: {
         enabled: config.qqEnhancerEnabled && config.qqProactiveReplyEnabled,
         judgeEveryMessages: config.qqProactiveJudgeEveryMessages,

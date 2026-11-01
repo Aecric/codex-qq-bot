@@ -15,7 +15,8 @@ export function createQqTaskPleadingTracker({
   softChance = 0.25,
   onChange = () => {}
 } = {}) {
-  const maximum = Math.max(0, Math.round(Number(required) || 0));
+  const normalizeRequired = (value) => Math.max(0, Math.round(Number(value) || 0));
+  let maximum = normalizeRequired(required);
   const roundsByKey = new Map();
 
   function rollNeeded() {
@@ -26,7 +27,22 @@ export function createQqTaskPleadingTracker({
   }
 
   return {
-    required: maximum,
+    get required() {
+      return maximum;
+    },
+    // Applies a new ask count at runtime; open rounds never need more than it,
+    // and turning the rule off forgets them.
+    setRequired(value) {
+      maximum = normalizeRequired(value);
+      let changed = false;
+      for (const [key, round] of roundsByKey) {
+        if (maximum > 1 && round.needed <= maximum) continue;
+        changed = true;
+        if (maximum > 1) round.needed = maximum;
+        else roundsByKey.delete(key);
+      }
+      if (changed) onChange();
+    },
     // True while this person has an unfinished round, so a bare "求求你" that
     // follows a refusal can be counted as the next ask.
     pending(key) {

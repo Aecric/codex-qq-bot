@@ -327,3 +327,7 @@ The default remains `127.0.0.1`. Enable LAN only on explicit request:
 3. Limit firewall access to required private subnets and bypass private addresses in proxy/VPN rules.
 4. Test the page and token-authenticated API from another device, and confirm the token is absent from Git, logs and screenshots.
 5. For durable public access, use a managed named tunnel or TLS reverse proxy with authentication and rate limits; do not bind Hub directly to the public internet.
+
+Local macOS resource detection fix: available memory includes vm_stat free, inactive and speculative pages, excluding swap, compressed and active/wired memory. Probe failures retain the Node free-memory fallback.
+
+OneBot HTTP callbacks accept NapCat X-Signature HMAC-SHA1 using ONEBOT_ACCESS_TOKEN over the exact raw bytes. Bearer auth, the 256 KiB limit and JSON validation remain enforced.

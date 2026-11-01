@@ -208,6 +208,19 @@ With Claude Code, `ai.model`, the reasoning summary, the Codex personality and t
 | `CODEX_REMOTE_CONTACT_AGENT_TOOL_TRANSPORT` | `mcp` | How Codex receives the Hub's QQ tools: `mcp` serves them from a per-turn MCP server (re-listed on every resume), `dynamic` keeps App Server dynamic tools. Claude Code always uses MCP. Both defer tool schemas until the model searches for a tool |
 | `CODEX_REMOTE_CONTACT_AGENT_LEAN_CONTEXT` | `0` | Opt-in for chat-only deployments: `1` removes connectors, plugins, browser/computer use, sub-agents, goals, the skill catalog and the checkout's AGENTS.md from Codex QQ turns (owner/administrator file tasks keep AGENTS.md) |
 | `CODEX_REMOTE_CONTACT_QQ_BASE_INSTRUCTIONS` | `engine` | `engine` keeps the engine's own system prompt; `qq` swaps in the compact QQ base prompt for QQ replies |
+| `CODEX_REMOTE_CONTACT_QQ_SELF_PERSONA_GENERATION` | `1` | `0` stops periodic global self-persona rewrites, for deployments with a fixed character card; scope summaries still run. A `branding.assistantName` other than `assistant` is the fixed character name and takes precedence over the QQ nickname |
+| `CODEX_REMOTE_CONTACT_QQ_REPLY_SCRUB` | `1` | Before delivery, drops chat-reply sentences that break character ("根据角色卡", "我正在扮演") or read as service boilerplate ("希望对你有帮助", "随时找我"); honest AI-identity answers, code, links and quoted text are kept; `0` disables it |
+| `CODEX_REMOTE_CONTACT_QQ_PROACTIVE_GROUPS` | empty | Comma-separated group IDs where un-mentioned proactive replies may start; empty means every allowlisted group. Mentions, replies to the Bot and follow-ups are unaffected |
+| `CODEX_REMOTE_CONTACT_QQ_ENGAGED_WINDOW_MESSAGES` | `30` | Human messages the Bot keeps watching after it answers an @ in a group: each one goes to the interest judge to decide whether it continues the Bot's conversation, and every reply the Bot delivers inside the window starts a fresh one; requires proactive interest, `0` disables it |
+| `CODEX_REMOTE_CONTACT_QQ_STICKER_MIN_CHANCE` | `0` | Minimum chance (0–1) that a chatty reply is planned as a sticker turn, allowed to exceed the cap learned from the group; task replies are unaffected |
+| `CODEX_REMOTE_CONTACT_QQ_TASK_PLEADING_ASKS` | `0` | Persona rule: the most times within 15 minutes the same person must ask before a task reply (code, lookups, searches and similar) is carried out. Each round is rolled when it starts: about 20% are accepted on the first ask ("good mood"), about 25% on the second, and the rest need this full count; turns that are not accepted are told by the Hub to refuse in character and do nothing. The count resets after the task runs and lives in memory; `0` or `1` disables it |
+| `CODEX_REMOTE_CONTACT_QQ_SESSION_ROTATE_HOURS` | `0` | Retire a long-lived session thread after this many hours: once the group or private chat has been quiet for 3 minutes, a chat summary first saves memory into long-term knowledge and impressions, then the thread mapping is dropped; rolling context, impressions and knowledge stay. A failed summary retries after 30 minutes; `0` disables it |
+| `CODEX_REMOTE_CONTACT_QQ_SESSION_ROTATE_REPLIES` | `0` | Same, triggered by the number of replies carried by the thread; whichever limit comes first wins, `0` disables it |
+| `CODEX_REMOTE_CONTACT_QQ_QUOTA_SAVER_BELOW` | `0` | Saver mode: once less than this percent of the Codex 5-hour window remains, replies switch to the saver model at low effort with Fast off, and every session moves to a fresh thread (memory, impressions, knowledge and recent chat are kept). Proactive interest stops only when the interest provider is `codex`; providers that do not spend Codex quota, such as `ollama`, keep judging. The previous settings are stored in `data/qq-quota-guard.json`; `0` disables it |
+| `CODEX_REMOTE_CONTACT_QQ_QUOTA_SAVER_RESUME_AT` | `50` | Saver mode ends when the window is back to this percent or resets, restoring the previous model, effort, service tier and proactive-interest switch |
+| `CODEX_REMOTE_CONTACT_QQ_QUOTA_SAVER_MODEL` | `gpt-6-luna` | Model used in saver mode |
+
+The self-persona generation, reply scrubbing, proactive groups, watched messages after an @, minimum sticker chance, asks before tasks, session rotation and quota saver settings above, plus the idle-based interest provider switch below, can all be changed on the dashboard's Intelligence page. Saving applies them at once, with no restart. These environment variables only provide initial values: once written to `data/settings.json`, its `qq.behavior` wins and later environment changes have no effect. Setting the quota saver threshold to `0` also leaves an active saver mode at once and restores the saved settings. Gemini and the Ollama endpoint stay environment-only; the dashboard only shows their status.
 
 The QQ bot is also a working Agent, so by default every native Codex feature and the engine's own system prompt stay in QQ turns; context is reduced only by deferring the 3–5k-token QQ tool catalog and by keeping the sticker library out of the prompt. Measured on Codex 0.163, a complete QQ reply request costs about 21.5k input tokens with these defaults and about 10.3k with both opt-in switches, which drop native capabilities.
 
@@ -235,12 +248,16 @@ Use the same token on both sides. Without one, the webhook trusts only requests 
 | `CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE` | `1` | Semantic judge switch |
 | `..._JUDGE_EVERY_MESSAGES` | `20` | Ordinary unmentioned message threshold, 1–1000 |
 | `..._JUDGE_EVERY_MINUTES` | `5` | Minute threshold for a non-empty cycle; `0` disables this branch |
-| `..._JUDGE_PROVIDER` | `openrouter` | Interest provider: `openrouter`, `deepseek`, or `custom` |
+| `..._JUDGE_PROVIDER` | `openrouter` | Interest provider: `openrouter`, `deepseek`, `custom`, `codex`, or `ollama` |
 | `..._JUDGE_MODEL` | provider-specific | `openrouter/free` for OpenRouter; `deepseek-v4-flash` for DeepSeek |
 | `..._JUDGE_API_KEY` | empty | Credential for the `custom` provider |
 | `..._JUDGE_BASE_URL` | empty | OpenAI-compatible API root for the `custom` provider |
 | `..._JUDGE_TIMEOUT_MS` | `6500` | Streaming idle timeout |
 | `..._JUDGE_VISION` | `auto` | Whether the ordinary interest gate also receives up to two small JPEG previews of pictures in the judged messages: `auto` tries once per provider/model and falls back to text-only (remembered until restart) when the provider rejects image input, `on` always tries, `off` never sends pictures. Pictures go to the configured third-party interest provider |
+| `..._JUDGE_IDLE_SWITCH` | off | `1` lets owner presence pick the interest provider on macOS: while keyboard or mouse input is recent (under 30 s) the judge uses the active provider and the local model is unloaded; after the idle threshold the local model is loaded first and the judge moves to the idle provider. Quota saver mode pins the idle provider. While on, this switch owns the provider choice |
+| `..._JUDGE_IDLE_AFTER_SECONDS` | `300` | Idle seconds before the idle provider takes over (60–86400) |
+| `..._JUDGE_ACTIVE_PROVIDER` | `codex` | Provider while the owner uses the computer; its default model is used |
+| `..._JUDGE_IDLE_PROVIDER` | `ollama` | Provider while the computer is idle; its default model is used |
 | `CODEX_REMOTE_CONTACT_QQ_IMAGE_MAX_BYTES` | `20971520` | QQ image limit, 20 MiB by default |
 | `CODEX_REMOTE_CONTACT_QQ_COMPRESSED_IMAGE_MAX_EDGE` | `1600` | Compressed inspection's longest edge, bounded 256–4096 px; automatic startup selects 1280/1600/2048 according to Hub memory |
 | `CODEX_REMOTE_CONTACT_QQ_FILE_MAX_BYTES` | `52428800` | Per-file limit for model-selected inbound QQ downloads; bounded to 1 MiB–1 GiB |
@@ -272,8 +289,11 @@ Self-persona thresholds use `CODEX_REMOTE_CONTACT_QQ_SELF_PERSONA_*`; account st
 | `OPENROUTER_BASE_URL` | official endpoint | OpenRouter endpoint |
 | `DEEPSEEK_API_KEY` | empty | DeepSeek interest-model credential |
 | `DEEPSEEK_BASE_URL` | official endpoint | DeepSeek endpoint |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434/v1` | Ollama OpenAI-compatible endpoint for the `ollama` interest provider |
+| `GEMINI_API_KEY` | empty | Adds the qq_search.ask_gemini tool so the Bot can ask Gemini to decode riddles, puns and memes it does not get; the key is read from the environment only |
+| `CODEX_REMOTE_CONTACT_GEMINI_MODEL` | `gemini-3.8-flash` | Gemini model used by ask_gemini |
 
-Switch providers from Intelligence in the dashboard or with the owner command `/兴趣厂商 openrouter|deepseek|custom`; `/兴趣模型 model-id` overrides the provider default. Credentials remain environment-only and are never persisted to `data/settings.json`. OpenRouter uses strict JSON Schema, while DeepSeek and custom compatible services use JSON Object mode. Run `npm run ncc -- search-config` to initialize the repository environment. Diagnose `/api/maintenance` and the `search` / `interest` logs before editing prompts.
+Switch providers from Intelligence in the dashboard or with the owner command `/兴趣厂商 openrouter|deepseek|custom|codex|ollama`; `/兴趣模型 model-id` overrides the provider default. Credentials remain environment-only and are never persisted to `data/settings.json`. OpenRouter uses strict JSON Schema, while DeepSeek and custom compatible services use JSON Object mode. `codex` needs no key: each judgment is a tool-free, low-effort turn on the local Codex login (default model `gpt-6-luna`) that shares the Codex queue with replies. `ollama` needs no key either: it calls the local Ollama daemon (default model `gemma4:e4b-it-qat`, a 4-bit build that holds about 4GB; the unquantized build holds about 10GB and pushes NapCat into swap on a 16GB machine) with thinking turned off (a short `low` pass only when pictures are attached, which a small model otherwise misreads) and `keep_alive: -1`, so the model stays loaded and each judgment returns in a few seconds; pull the model first with `ollama pull gemma4:e4b-it-qat`. Run `npm run ncc -- search-config` to initialize the repository environment. Diagnose `/api/maintenance` and the `search` / `interest` logs before editing prompts.
 
 ### Logs
 

@@ -594,6 +594,8 @@ select { appearance: none; padding-right: 30px; background-image: linear-gradien
 .toggle-card strong { font-size: 13px; }
 .toggle-card small { color: var(--muted); font-size: 12px; line-height: 1.45; }
 .tuning-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; }
+.bot-group-title { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-2); font-size: 13px; font-weight: 600; }
+.field-hint { color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.45; }
 .form-actions { display: flex; justify-content: flex-end; }
 .save-state { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .save-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }

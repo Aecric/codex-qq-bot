@@ -111,6 +111,10 @@ Recurring QQ behavior uses persisted wall-clock timestamps instead of process up
 
 ## Proactive interest
 
+Group-chat replies and file tasks get no shell, host command or image viewer and can only write inside the turn's task folder; requests from anyone in a group to read local files, configuration or secrets, or to ignore the rules, are refused as injection attempts. With task pleading on, an accepted task runs in a one-off thread and leaves only a one-line task record in the chat memory, so it does not fill the long-lived session context.
+
+In groups where proactive replies are allowed, a shared Bilibili video card gets a one- or two-sentence roast of its title without going through the interest model (at most once per group every two minutes); the Bot only sees the title, never claims to have watched the video and does not search for it.
+
 Three constrained paths exist:
 
 Cold-group and private-outreach checks persist the latest human-message timestamp captured before judgment. Once that context has been checked, approval, silence, decline, or failure all require a newer human message before another interest-model call. Elapsed cooldowns, Bot messages, and Hub restarts do not reopen the same context. Human messages arriving during judgment remain eligible for a later check. Older saved state uses its previous check time as the initial watermark.

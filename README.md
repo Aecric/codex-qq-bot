@@ -114,7 +114,7 @@ Both engines support [host access requests per command](docs/OPERATIONS.md#reque
 - **Learning how people talk**: it tracks pacing, reply length, emoji and punctuation habits, and periodically has the main model compare the bot's style with real members and adjust its rules.
 - **Management from QQ**: switch models, change reasoning effort, edit the allowlist and permissions, mute, manage groups, handle friend and join requests, post to Qzone. The owner can appoint bot administrators, who cannot appoint others or make the model run destructive file operations.
 - **Manual tasks**: send `/AI任务` in QQ or run `ncc ai-run` to run a chat summary, style review, persona refresh or knowledge review right away.
-- **Dashboard**: open `http://127.0.0.1:3789/` for status, channels, memory, the knowledge base and logs. There is also a native macOS wrapper.
+- **Dashboard**: open `http://127.0.0.1:3789/` for status, channels, memory, the knowledge base and logs. Its Intelligence page adjusts proactive groups, the watch window after an @, reply scrubbing, session rotation, the Codex quota saver and idle-based interest provider switching, and saving applies them at once. There is also a native macOS wrapper.
 
 See [features](docs/FEATURES.md) for the full description.
 
@@ -160,7 +160,7 @@ If `data/settings.json` does not exist it is copied from `config/settings.exampl
 }
 ```
 
-Keep the OneBot token and OpenRouter / DeepSeek / Tavily keys in `config/local.env` or the process environment, never in the repository. Every option is listed in the [configuration reference](docs/CONFIGURATION.md).
+Keep the OneBot token and OpenRouter / DeepSeek / Tavily keys in `config/local.env` or the process environment, never in the repository. For settings the dashboard's Intelligence page can change, environment variables only provide initial values; once written to `data/settings.json`, the file wins. Every option is listed in the [configuration reference](docs/CONFIGURATION.md).
 
 ## Layout
 

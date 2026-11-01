@@ -33,6 +33,7 @@ export function createSettingsSnapshot({
       bannedUntilByUserId: state.qq.bannedUntilByUserId,
       enhancer: { enabled: state.qq.enhancer.enabled },
       webLookup: { enabled: state.qq.webLookup.enabled },
+      behavior: state.qq.behavior,
       proactive: {
         enabled: state.qq.proactive.enabled,
         judgeEveryMessages: state.qq.proactive.judgeEveryMessages,

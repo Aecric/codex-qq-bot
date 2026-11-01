@@ -114,7 +114,7 @@ npm run ncc -- start           # 在终端里启动时也会问一次，直接�
 - **学说话方式**：统计群里的节奏、回复长短、表情和标点习惯；定期让主模型对比真人和 Bot 的说话方式，调整规则。
 - **QQ 里直接管理**：切模型、改思考强度、白名单、权限、禁言、群管理、处理好友和入群申请、发 QQ 空间。主人可以设 Bot 管理员，管理员不能再授权别人，也不能让模型做破坏性的文件操作。
 - **手动任务**：在 QQ 里发 `/AI任务`，或用 `ncc ai-run`，可以立刻跑聊天总结、风格复盘、人设刷新、知识库审核。
-- **仪表盘**：浏览器打开 `http://127.0.0.1:3789/`，能看运行状态、通道、记忆、知识库和日志。macOS 另有一个原生壳。
+- **仪表盘**：浏览器打开 `http://127.0.0.1:3789/`，能看运行状态、通道、记忆、知识库和日志。“行为”页可以直接调整主动接话的群、@ 后的观察窗口、回复清理、会话轮换、Codex 额度省电和兴趣模型的闲置切换，保存后立即生效。macOS 另有一个原生壳。
 
 更完整的说明见[功能说明](docs/FEATURES_CN.md)。
 
@@ -160,7 +160,7 @@ npm run ncc -- logs --errors --since 30m --summary
 }
 ```
 
-OneBot token、OpenRouter / DeepSeek / Tavily 的 key 这类东西放在 `config/local.env` 或进程环境变量里，别提交进仓库。所有配置项见[配置参考](docs/CONFIGURATION_CN.md)。
+OneBot token、OpenRouter / DeepSeek / Tavily 的 key 这类东西放在 `config/local.env` 或进程环境变量里，别提交进仓库。仪表盘“行为”页能改的设置，环境变量只提供初始值，写入 `data/settings.json` 后以文件为准。所有配置项见[配置参考](docs/CONFIGURATION_CN.md)。
 
 ## 目录
 

@@ -33,9 +33,31 @@ test("settings snapshot persists every native Codex runtime parameter", () => {
   assert.equal(snapshot.qq.proactive.judge.apiKeyConfigured, true);
   assert.deepEqual(snapshot.qq.adminUserIds, ["123456789"]);
   assert.deepEqual(snapshot.branding.assistantMentions, ["@小星"]);
+  assert.deepEqual(snapshot.qq.behavior, state.qq.behavior);
 
   state.ai.personality = "friendly";
   state.qq.allowedGroups.push("123");
   assert.equal(snapshot.ai.personality, "pragmatic");
   assert.deepEqual(snapshot.qq.allowedGroups, []);
+});
+
+test("behavior settings start from the environment", () => {
+  const state = createInitialState({
+    config: createEnvironmentConfig({
+      CODEX_REMOTE_CONTACT_QQ_ENGAGED_WINDOW_MESSAGES: "12",
+      CODEX_REMOTE_CONTACT_QQ_REPLY_SCRUB: "0",
+      CODEX_REMOTE_CONTACT_QQ_PROACTIVE_GROUPS: "123456,234567",
+      CODEX_REMOTE_CONTACT_QQ_QUOTA_SAVER_BELOW: "20",
+      CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_IDLE_SWITCH: "1",
+      CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_IDLE_AFTER_SECONDS: "600"
+    }),
+    codexWorkspaceDir: "/tmp/workspace",
+    qqProactiveInterestPreset: {}
+  });
+  assert.equal(state.qq.behavior.engagedWindowMessages, 12);
+  assert.equal(state.qq.behavior.replyScrubEnabled, false);
+  assert.deepEqual(state.qq.behavior.proactiveGroupIds, ["123456", "234567"]);
+  assert.equal(state.qq.behavior.quotaSaverBelow, 20);
+  assert.equal(state.qq.behavior.judgeIdleSwitchEnabled, true);
+  assert.equal(state.qq.behavior.judgeIdleAfterSeconds, 600);
 });

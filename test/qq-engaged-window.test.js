@@ -42,3 +42,20 @@ test("a window survives a snapshot and restore but lapses when idle", () => {
   assert.equal(after.remaining("100"), 0);
   assert.equal(after.consume("100"), null);
 });
+
+test("resizing caps open windows and a zero size closes them", () => {
+  let saves = 0;
+  const windows = createQqEngagedWindows({ size: 10, onChange: () => { saves += 1; } });
+  windows.open("100");
+  const before = saves;
+  windows.resize(20);
+  assert.equal(windows.size, 20);
+  assert.equal(windows.remaining("100"), 10);
+  assert.equal(saves, before, "growing leaves open windows untouched");
+  windows.resize(4);
+  assert.equal(windows.remaining("100"), 4);
+  windows.resize(0);
+  assert.equal(windows.remaining("100"), 0);
+  windows.open("100");
+  assert.equal(windows.remaining("100"), 0);
+});

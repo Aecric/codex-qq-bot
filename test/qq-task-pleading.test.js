@@ -78,3 +78,16 @@ test("an unfinished round survives a snapshot and restore", () => {
   assert.equal(after.pending("g:1"), true);
   assert.deepEqual([after.note("g:1").count, after.note("g:1").allowed], [2, true]);
 });
+
+test("changing the ask count caps open rounds and zero turns the rule off", () => {
+  const tracker = createQqTaskPleadingTracker({ required: 5, random: () => 0.9 });
+  assert.equal(tracker.note("a").allowed, false);
+  tracker.setRequired(2);
+  assert.equal(tracker.required, 2);
+  assert.equal(tracker.note("a").allowed, true, "the second ask now meets the lower count");
+  tracker.setRequired(3);
+  assert.equal(tracker.note("b").allowed, false);
+  tracker.setRequired(0);
+  assert.equal(tracker.pending("b"), false);
+  assert.equal(tracker.note("b").allowed, true);
+});

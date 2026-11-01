@@ -438,7 +438,7 @@ import { createWebSearch, formatWebSearchProviderName } from "./web-search.js";
 import { isSupportedImageContentType, readResponseJson, writeResponseBodyToFile } from "./bounded-stream.js";
 import { runJsonProcess } from "./process-runner.js";
 import { createDashboardAssetHandler } from "./dashboard-assets.js";
-import { applyDashboardBotSettings, readDashboardBotSettings } from "./dashboard-bot-settings.js";
+import { applyDashboardBotSettings, normalizeQqBehaviorSettings, readDashboardBotSettings } from "./dashboard-bot-settings.js";
 import { selectLanAccessAddresses } from "./network-access.js";
 import { createPublicTunnelManager } from "./public-tunnel.js";
 import { requestHasValidToken } from "./request-auth.js";
@@ -565,10 +565,6 @@ const {
   qqProactiveJudgeModel,
   qqProactiveJudgeTimeoutMs,
   qqProactiveJudgeVision,
-  qqJudgeIdleSwitchEnabled,
-  qqJudgeIdleSwitchAfterSeconds,
-  qqJudgeIdleSwitchActiveProvider,
-  qqJudgeIdleSwitchIdleProvider,
   qqProactiveJudgeMinInterest,
   qqSelfPersonaScopeInitialMessages,
   qqSelfPersonaScopeMessages,
@@ -580,17 +576,6 @@ const {
   qqSelfPersonaGenerationScopeSummaries,
   qqSelfPersonaGenerationCooldownHours,
   qqSelfPersonaFailureRetryHours,
-  qqSelfPersonaGenerationEnabled,
-  qqReplyScrubEnabled,
-  qqProactiveGroupIds,
-  qqEngagedWindowMessages,
-  qqStickerMinChance,
-  qqQuotaSaverBelow,
-  qqQuotaSaverResumeAt,
-  qqQuotaSaverModel,
-  qqSessionRotateHours,
-  qqSessionRotateReplies,
-  qqTaskPleadingAsks,
   qqWebLookupEnabled,
   qqWebLookupTimeoutMs,
   qqWebLookupAttemptTimeoutMs,
@@ -1323,6 +1308,9 @@ async function loadSettings() {
     }
     if (body.qq?.webLookup && typeof body.qq.webLookup === "object") {
       state.qq.webLookup.enabled = body.qq.webLookup.enabled !== false;
+    }
+    if (body.qq?.behavior && typeof body.qq.behavior === "object") {
+      state.qq.behavior = normalizeQqBehaviorSettings(body.qq.behavior, state.qq.behavior);
     }
     if (body.qq?.proactive && typeof body.qq.proactive === "object") {
       state.qq.proactive.enabled = state.qq.enhancer.enabled && body.qq.proactive.enabled !== false;
@@ -2587,7 +2575,7 @@ async function refreshQqSelfPersona() {
 
   // A fixed character card can opt out of periodic global persona rewrites;
   // scope summaries still run for knowledge and topic context.
-  const generation = qqSelfPersonaGenerationEnabled
+  const generation = state.qq.behavior.selfPersonaGenerationEnabled
     ? await runQqGlobalSelfPersonaGeneration({ source: "periodic" })
     : { ok: false };
   if (!generation.ok) {
@@ -2905,18 +2893,18 @@ async function commitQqCodexSessionForEvent(event) {
 // they use the computer, the local idle provider once it has been idle. The
 // local model is loaded before the switch (a cold load outlasts the judge's
 // token deadline) and unloaded when the owner comes back.
-const qqInterestIdleSwitch = qqJudgeIdleSwitchEnabled ? createQqInterestIdleSwitch({
+const qqInterestIdleSwitch = createQqInterestIdleSwitch({
   readIdleSeconds: () => readHostIdleSeconds(),
   getOptions: () => ({
     current: state.qq.proactive.judge.provider,
-    activeProvider: qqJudgeIdleSwitchActiveProvider,
-    idleProvider: qqJudgeIdleSwitchIdleProvider,
-    idleAfterSeconds: qqJudgeIdleSwitchAfterSeconds,
-    pinIdleProvider: qqQuotaGuardState.active && !qqQuotaSaverKeepsInterestJudge(qqJudgeIdleSwitchActiveProvider)
+    activeProvider: state.qq.behavior.judgeActiveProvider,
+    idleProvider: state.qq.behavior.judgeIdleProvider,
+    idleAfterSeconds: state.qq.behavior.judgeIdleAfterSeconds,
+    pinIdleProvider: qqQuotaGuardState.active && !qqQuotaSaverKeepsInterestJudge(state.qq.behavior.judgeActiveProvider)
   }),
   apply: applyQqInterestIdleSwitch,
   onError: (error) => logger.warn("QQ interest idle switch failed", { error }, "interest")
-}) : null;
+});
 
 // Saver mode state survives restarts so the owner's own model, effort, tier
 // and interest setting can always be restored afterwards.
@@ -2930,12 +2918,17 @@ try {
 let qqQuotaGuardJob = null;
 
 function maybeApplyQqQuotaGuard(quota) {
-  if (qqQuotaGuardJob || !(qqQuotaSaverBelow > 0) || agentEngine !== "codex") return;
-  const decision = decideQqQuotaGuard(quota, {
-    active: qqQuotaGuardState.active,
-    enterBelowPercent: qqQuotaSaverBelow,
-    exitAtPercent: qqQuotaSaverResumeAt
-  });
+  if (qqQuotaGuardJob || agentEngine !== "codex") return;
+  const { quotaSaverBelow, quotaSaverResumeAt } = state.qq.behavior;
+  // Turning saver mode off from the dashboard must also bring back the saved
+  // model and settings when it is currently active.
+  const decision = quotaSaverBelow > 0
+    ? decideQqQuotaGuard(quota, {
+      active: qqQuotaGuardState.active,
+      enterBelowPercent: quotaSaverBelow,
+      exitAtPercent: quotaSaverResumeAt
+    })
+    : (qqQuotaGuardState.active ? "exit" : null);
   if (!decision) return;
   const job = applyQqQuotaGuard(decision, quota).finally(() => {
     qqQuotaGuardJob = null;
@@ -2956,10 +2949,10 @@ async function applyQqQuotaGuard(decision, quota) {
         proactiveEnabled: Boolean(state.qq.proactive.enabled)
       }
     };
-    state.ai.model = qqQuotaSaverModel;
+    state.ai.model = state.qq.behavior.quotaSaverModel;
     state.ai.reasoningEffort = "low";
     state.ai.serviceTier = "";
-    const saverJudgeProvider = qqInterestIdleSwitch ? qqJudgeIdleSwitchIdleProvider : state.qq.proactive.judge.provider;
+    const saverJudgeProvider = state.qq.behavior.judgeIdleSwitchEnabled ? state.qq.behavior.judgeIdleProvider : state.qq.proactive.judge.provider;
     if (!qqQuotaSaverKeepsInterestJudge(saverJudgeProvider)) state.qq.proactive.enabled = false;
   } else {
     const saved = qqQuotaGuardState.saved || {};
@@ -2975,7 +2968,7 @@ async function applyQqQuotaGuard(decision, quota) {
     state.qq.codexSession.store = removeQqCodexSessionThread(state.qq.codexSession.store, scopeId);
   }
   await Promise.all([saveSettings(), saveQqCodexSessions(), writeJsonAtomically(qqQuotaGuardPath, qqQuotaGuardState)]);
-  if (qqInterestIdleSwitch) trackBackgroundTask(qqInterestIdleSwitch.refresh(), () => {});
+  if (state.qq.behavior.judgeIdleSwitchEnabled) trackBackgroundTask(qqInterestIdleSwitch.refresh(), () => {});
   logger.warn(decision === "enter" ? "QQ quota saver mode entered" : "QQ quota saver mode left", {
     remainingPercent: quota?.primary?.remainingPercent ?? null,
     resetsAt: quota?.primary?.resetsAt ?? null,
@@ -3015,12 +3008,13 @@ const qqSessionRotationRetryAtByScope = new Map();
 let qqSessionRotationJob = null;
 
 function maybeRotateQqCodexSessions() {
-  if (qqSessionRotationJob || shuttingDown || !(qqSessionRotateHours > 0 || qqSessionRotateReplies > 0)) return;
+  const { sessionRotateHours, sessionRotateReplies } = state.qq.behavior;
+  if (qqSessionRotationJob || shuttingDown || !(sessionRotateHours > 0 || sessionRotateReplies > 0)) return;
   const now = Date.now();
   for (const thread of Object.values(state.qq.codexSession.store.threads || {})) {
     const reason = getQqCodexSessionRotationReason(thread, {
-      maxAgeHours: qqSessionRotateHours,
-      maxReplies: qqSessionRotateReplies,
+      maxAgeHours: sessionRotateHours,
+      maxReplies: sessionRotateReplies,
       now
     });
     if (!reason || Number(qqSessionRotationRetryAtByScope.get(thread.scopeId) || 0) > now) continue;
@@ -3231,6 +3225,14 @@ function buildPublicState() {
       enhancer: { enabled: state.qq.enhancer.enabled },
       webLookup: { enabled: state.qq.webLookup.enabled },
       botSettings: readDashboardBotSettings(state),
+      botRuntime: {
+        quotaSaverActive: Boolean(qqQuotaGuardState.active),
+        quotaSaverSince: qqQuotaGuardState.since || null,
+        engagedGroups: Object.keys(qqEngagedWindows.snapshot()).length,
+        geminiConfigured: Boolean(environmentConfig.geminiApiKey),
+        geminiModel: environmentConfig.geminiModel,
+        ollamaBaseUrl: environmentConfig.ollamaBaseUrl
+      },
       codexSession: {
         defaultMode: state.qq.codexSession.settings.defaultMode,
         scopes: { ...state.qq.codexSession.settings.scopes },
@@ -10133,7 +10135,7 @@ async function buildModelReply(event, { replyScope = null } = {}) {
   const humanChatStyle = adaptiveSignals
     ? personalizeQqHumanStyle(baseHumanChatStyle, adaptiveSignals)
     : baseHumanChatStyle;
-  const humanBehaviorPlan = buildQqHumanBehaviorPlan(event, conversationIntent, humanChatStyle, { text, stickerMinChance: qqStickerMinChance });
+  const humanBehaviorPlan = buildQqHumanBehaviorPlan(event, conversationIntent, humanChatStyle, { text, stickerMinChance: state.qq.behavior.stickerMinChance });
   // Sticker-friendly turns get a few ready candidates so a sticker does not
   // always cost a tool search; the full library stays behind qq_sticker.
   const stickerCatalog = state.qq.enhancer.enabled ? await buildQqStickerCatalog(qqStickerDir) : [];
@@ -10317,7 +10319,7 @@ async function buildModelReply(event, { replyScope = null } = {}) {
       outputDir: taskWorkspace.outputDir,
       generatedAfterMs: turnStartedAt,
       maxImageBytes: qqImageMaxBytes,
-      scrubBubbles: qqReplyScrubEnabled ? scrubQqReplyBubbles : null
+      scrubBubbles: state.qq.behavior.replyScrubEnabled ? scrubQqReplyBubbles : null
     });
     logQqGeneratedAttachmentImport(parsed, event, result);
     event.qqAgentStructuredOutput = parsed.structured;
@@ -13281,9 +13283,9 @@ const codexInterestFetch = createCodexInterestFetch({
   }
 });
 
-const qqEngagedWindows = createQqEngagedWindows({ size: qqEngagedWindowMessages, onChange: () => saveQqChatContinuity() });
+const qqEngagedWindows = createQqEngagedWindows({ size: state.qq.behavior.engagedWindowMessages, onChange: () => saveQqChatContinuity() });
 const QQ_ENGAGED_JUDGE_WAIT_MS = 30_000;
-const qqTaskPleading = createQqTaskPleadingTracker({ required: qqTaskPleadingAsks, onChange: () => saveQqChatContinuity() });
+const qqTaskPleading = createQqTaskPleadingTracker({ required: state.qq.behavior.taskPleadingAsks, onChange: () => saveQqChatContinuity() });
 // Open watch windows and unfinished task pleas are saved so a Hub restart
 // does not cut off a conversation that is still going.
 const qqChatContinuityPath = join(projectDir, "data", "qq-chat-continuity.json");
@@ -13334,7 +13336,17 @@ function getQqTaskPleadingKey(event) {
 }
 
 function isQqProactiveGroup(groupId) {
-  return qqProactiveGroupIds.length === 0 || qqProactiveGroupIds.includes(String(groupId || ""));
+  const groupIds = state.qq.behavior.proactiveGroupIds;
+  return groupIds.length === 0 || groupIds.includes(String(groupId || ""));
+}
+
+// Pushes the saved behavior settings into the long-lived helpers that keep
+// their own copy, at startup and after each dashboard change.
+function syncQqBehaviorRuntime() {
+  qqEngagedWindows.resize(state.qq.behavior.engagedWindowMessages);
+  qqTaskPleading.setRequired(state.qq.behavior.taskPleadingAsks);
+  if (state.qq.behavior.judgeIdleSwitchEnabled) qqInterestIdleSwitch.start();
+  else trackBackgroundTask(qqInterestIdleSwitch.stop(), () => {});
 }
 
 async function ensureCodexReplyWorkspace() {
@@ -14948,6 +14960,8 @@ async function handleApi(req, res) {
       change.restore();
       throw error;
     }
+    syncQqBehaviorRuntime();
+    maybeApplyQqQuotaGuard(state.maintenance.codex.quota);
     logger.info("Dashboard Bot settings updated", buildQqOperationLogDetails(null, {
       operation: "settings.update",
       outcome: "persisted",
@@ -15335,7 +15349,7 @@ function scheduleHubRebind(nextHost) {
 }
 
 await listenHub(currentHubHost);
-qqInterestIdleSwitch?.start();
+syncQqBehaviorRuntime();
 if (state.network.publicTunnelEnabled) {
   trackBackgroundTask(
     publicTunnelManager.start().then((tunnelStatus) => logger.success("Dashboard public tunnel started", {
@@ -15359,7 +15373,7 @@ function shutdown(signal) {
     state.channels.qq = false;
     qqAvatarRefreshQueue.stop();
     const stopPeriodicScheduler = qqPeriodicScheduler?.stop?.() || Promise.resolve();
-    const stopInterestIdleSwitch = qqInterestIdleSwitch?.stop() || Promise.resolve();
+    const stopInterestIdleSwitch = qqInterestIdleSwitch.stop();
     qqPeriodicScheduler = null;
     const shutdownError = new Error("Hub is shutting down");
     shutdownError.code = "HUB_SHUTTING_DOWN";

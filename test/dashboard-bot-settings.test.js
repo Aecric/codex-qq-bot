@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyDashboardBotSettings, readDashboardBotSettings } from "../src/dashboard-bot-settings.js";
+import { applyDashboardBotSettings, normalizeQqBehaviorSettings, readDashboardBotSettings } from "../src/dashboard-bot-settings.js";
 
 function createState() {
   return {
@@ -55,7 +55,22 @@ test("dashboard Bot settings update bounded runtime controls and can roll back",
       { id: "custom", label: "自定义兼容服务", defaultModel: "gpt-4o-mini" },
       { id: "codex", label: "本机 Codex", defaultModel: "gpt-6-luna" },
       { id: "ollama", label: "本机 Ollama", defaultModel: "gemma4:e4b-it-qat" }
-    ]
+    ],
+    selfPersonaGenerationEnabled: true,
+    replyScrubEnabled: true,
+    proactiveGroupIds: [],
+    engagedWindowMessages: 30,
+    stickerMinChance: 0,
+    taskPleadingAsks: 0,
+    sessionRotateHours: 0,
+    sessionRotateReplies: 0,
+    quotaSaverBelow: 0,
+    quotaSaverResumeAt: 50,
+    judgeIdleAfterSeconds: 300,
+    quotaSaverModel: "gpt-6-luna",
+    judgeIdleSwitchEnabled: false,
+    judgeActiveProvider: "codex",
+    judgeIdleProvider: "ollama"
   });
 
   change.restore();
@@ -92,4 +107,76 @@ test("dashboard Bot settings reject malformed values without mutation", () => {
   assert.throws(() => applyDashboardBotSettings(state, { judgeModel: "bad model id" }), /valid provider model id/);
   assert.throws(() => applyDashboardBotSettings(state, { judgeProvider: "unknown" }), /must be one of/);
   assert.equal(readDashboardBotSettings(state).judgeTimeoutMs, 6500);
+});
+
+test("dashboard Bot settings edit the behavior controls and can roll them back", () => {
+  const state = createState();
+  state.qq.behavior = normalizeQqBehaviorSettings({ engagedWindowMessages: 30 });
+  const change = applyDashboardBotSettings(state, {
+    selfPersonaGenerationEnabled: false,
+    replyScrubEnabled: false,
+    proactiveGroupIds: "123456, 234567，123456",
+    engagedWindowMessages: 12,
+    stickerMinChance: 0.4,
+    taskPleadingAsks: 3,
+    sessionRotateHours: 1.5,
+    sessionRotateReplies: 50,
+    quotaSaverBelow: 20,
+    quotaSaverResumeAt: 40,
+    quotaSaverModel: "small-model",
+    judgeIdleSwitchEnabled: true,
+    judgeIdleAfterSeconds: 600,
+    judgeActiveProvider: "deepseek",
+    judgeIdleProvider: "codex"
+  });
+  assert.equal(state.qq.behavior.selfPersonaGenerationEnabled, false);
+  assert.equal(state.qq.behavior.replyScrubEnabled, false);
+  assert.deepEqual(state.qq.behavior.proactiveGroupIds, ["123456", "234567"]);
+  assert.equal(state.qq.behavior.stickerMinChance, 0.4);
+  assert.equal(state.qq.behavior.sessionRotateHours, 1.5);
+  assert.equal(state.qq.behavior.judgeIdleProvider, "codex");
+  assert.equal(change.settings.judgeIdleAfterSeconds, 600);
+  assert.equal(change.settings.judgeProvider, "openrouter", "the idle switch settings leave the current provider alone");
+
+  change.restore();
+  assert.equal(state.qq.behavior.engagedWindowMessages, 30);
+  assert.deepEqual(state.qq.behavior.proactiveGroupIds, []);
+  assert.equal(state.qq.behavior.judgeIdleSwitchEnabled, false);
+});
+
+test("dashboard Bot settings reject malformed behavior values without mutation", () => {
+  const state = createState();
+  state.qq.behavior = normalizeQqBehaviorSettings({});
+  assert.throws(() => applyDashboardBotSettings(state, { engagedWindowMessages: 201 }), /between 0 and 200/);
+  assert.throws(() => applyDashboardBotSettings(state, { engagedWindowMessages: 1.5 }), /integer/);
+  assert.throws(() => applyDashboardBotSettings(state, { stickerMinChance: 2 }), /between 0 and 1/);
+  assert.throws(() => applyDashboardBotSettings(state, { stickerMinChance: "" }), /between 0 and 1/);
+  assert.throws(() => applyDashboardBotSettings(state, { proactiveGroupIds: "123456, abc" }), /invalid group id: abc/);
+  assert.throws(() => applyDashboardBotSettings(state, { quotaSaverModel: "bad model" }), /valid model id/);
+  assert.throws(() => applyDashboardBotSettings(state, { judgeIdleProvider: "unknown" }), /must be one of/);
+  assert.throws(() => applyDashboardBotSettings(state, { replyScrubEnabled: "no" }), /must be a boolean/);
+  assert.throws(
+    () => applyDashboardBotSettings(state, { quotaSaverBelow: 60, quotaSaverResumeAt: 50 }),
+    /greater than quotaSaverBelow/,
+    "an exit threshold below the entry threshold would flap"
+  );
+  assert.deepEqual(state.qq.behavior, normalizeQqBehaviorSettings({}));
+});
+
+test("saved behavior settings are clamped and keep environment values for missing keys", () => {
+  const fallback = normalizeQqBehaviorSettings({ taskPleadingAsks: 3, quotaSaverBelow: 15 });
+  const loaded = normalizeQqBehaviorSettings({
+    engagedWindowMessages: 9999,
+    stickerMinChance: "oops",
+    proactiveGroupIds: ["123456", "bad"],
+    quotaSaverModel: "bad model",
+    judgeActiveProvider: "ollama"
+  }, fallback);
+  assert.equal(loaded.engagedWindowMessages, 200);
+  assert.equal(loaded.stickerMinChance, 0);
+  assert.deepEqual(loaded.proactiveGroupIds, ["123456"]);
+  assert.equal(loaded.quotaSaverModel, "gpt-6-luna");
+  assert.equal(loaded.judgeActiveProvider, "ollama");
+  assert.equal(loaded.taskPleadingAsks, 3);
+  assert.equal(loaded.quotaSaverBelow, 15);
 });
