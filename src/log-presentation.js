@@ -6,6 +6,7 @@ const messageTranslationsZh = Object.freeze({
   "Hub shutdown failed": "后端停止失败",
   "HTTP API request failed": "HTTP API 请求失败",
   "Unable to update dashboard listener": "更新仪表盘监听地址失败",
+  "Unable to store QQ created file": "暂存 QQ 生成文件失败",
   "NapCat login state changed": "NapCat 登录状态变化",
   "NapCat restart failed": "重启 NapCat 失败",
   "NapCat restarted from the dashboard": "已从仪表盘重启 NapCat",

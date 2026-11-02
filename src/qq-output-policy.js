@@ -4,6 +4,10 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const sendableImageExtensions = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
 
+export function isSendableQqImagePath(filePath) {
+  return sendableImageExtensions.has(extensionOf(filePath));
+}
+
 export function resolveQqMarkerPath(value, { projectDir } = {}) {
   const raw = String(value || "").trim();
   if (!raw || raw.includes("\0")) return "";

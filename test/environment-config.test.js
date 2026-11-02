@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createEnvironmentConfig } from "../src/config/environment.js";
 import { CODEX_TASK_TYPES } from "../src/codex-task-timeout.js";
+import { createRuntimePaths } from "../src/runtime-paths.js";
 
 test("builds one normalized configuration object from environment values", () => {
   const config = createEnvironmentConfig({
@@ -127,4 +129,22 @@ test("QQ agent turns default to deferred MCP tools and keep every native Codex f
   assert.equal(chatOnly.agentLeanContext, true);
   assert.equal(chatOnly.qqBaseInstructionsMode, "qq");
   assert.equal(createEnvironmentConfig({ CODEX_REMOTE_CONTACT_AGENT_TOOL_TRANSPORT: "grpc" }).agentToolTransport, "mcp");
+});
+
+test("server.js only destructures settings that its source object provides", () => {
+  const server = readFileSync(new URL("../src/server.js", import.meta.url), "utf8");
+  const sources = {
+    "createRuntimePaths({ projectDir })": createRuntimePaths({ projectDir: "/project", env: {} }),
+    environmentConfig: createEnvironmentConfig({})
+  };
+  for (const [expression, source] of Object.entries(sources)) {
+    const end = server.indexOf(`} = ${expression};`);
+    assert.notEqual(end, -1, expression);
+    const names = server.slice(server.lastIndexOf("const {", end) + "const {".length, end)
+      .split(",")
+      .map((name) => name.trim().split(":")[0].split("=")[0].trim())
+      .filter(Boolean);
+    assert.ok(names.length > 5, expression);
+    assert.deepEqual(names.filter((name) => !(name in source)), [], expression);
+  }
 });

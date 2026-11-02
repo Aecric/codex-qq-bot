@@ -67,6 +67,7 @@ import {
 } from "./qq-file-image-task-intent.js";
 import { resolveAllowedQqMarkerPath, resolveQqMarkerPath } from "./qq-output-policy.js";
 import { resolveQqReplyFileAttachments } from "./qq-reply-files.js";
+import { createQqCreatedFilesStore, createQqFileUploader, stageQqReplyImages } from "./qq-created-files.js";
 import {
   buildNapCatLoginResponse,
   createNapCatLoginClient,
@@ -522,6 +523,7 @@ const {
   qqStickerDir,
   qqOutputImagesDir,
   qqTaskWorkspacesDir,
+  qqCreatedFilesDir,
   napCatDockerEnvPath,
   dataDir,
   codexSessionsDir,
@@ -10414,6 +10416,9 @@ async function buildModelReply(event, { replyScope = null } = {}) {
       outputDir: taskWorkspace.outputDir,
       generatedAfterMs: turnStartedAt,
       maxImageBytes: qqImageMaxBytes,
+      // The native image tool is also available here, and a group turn has no
+      // shell to copy its result into the output directory itself.
+      recoverUnlistedGeneratedImage: true,
       scrubBubbles: state.qq.behavior.replyScrubEnabled ? scrubQqReplyBubbles : null
     });
     logQqGeneratedAttachmentImport(parsed, event, result);
@@ -13605,7 +13610,7 @@ async function sendOneBotGroupReply(event, reply, options = {}) {
 async function sendOneBotGroupMessage(event, reply, options = {}) {
   if (!event.groupId) return { ok: false, reason: "Missing group id" };
   assertQqReplyScopeActive(options.replyScope);
-  const mediaPaths = await resolveQqReplyMedia(reply, { stickerDir: qqStickerDir, event });
+  const mediaPaths = await stageQqGeneratedReplyImages({ groupId: event.groupId }, await resolveQqReplyMedia(reply, { stickerDir: qqStickerDir, event }), event);
   const { attachments: fileAttachments, failures: fileFailures } = await resolveQqReplyFiles(reply, event);
   assertQqReplyScopeActive(options.replyScope);
   const message = await buildOneBotReplyMessage(event, reply, options, mediaPaths, { fileAttachments, fileFailures });
@@ -13635,7 +13640,7 @@ async function sendOneBotGroupMessage(event, reply, options = {}) {
   const fileResults = [...fileFailures];
   for (const attachment of fileAttachments) {
     assertQqReplyScopeActive(options.replyScope);
-    fileResults.push(await uploadOneBotGroupFile(event.groupId, attachment, { signal: options.replyScope?.signal }));
+    fileResults.push(await qqFileUploader.uploadFile({ groupId: event.groupId }, attachment, { signal: options.replyScope?.signal }));
   }
 
   return combineOneBotSendResults(messageResult, fileResults);
@@ -13757,7 +13762,7 @@ async function sendOneBotPrivateReply(event, reply, options = {}) {
 async function sendOneBotPrivateMessage(event, reply, options = {}) {
   if (!event.senderId) return { ok: false, reason: "Missing user id" };
   assertQqReplyScopeActive(options.replyScope);
-  const mediaPaths = await resolveQqReplyMedia(reply, { stickerDir: qqStickerDir, event });
+  const mediaPaths = await stageQqGeneratedReplyImages({ userId: event.senderId }, await resolveQqReplyMedia(reply, { stickerDir: qqStickerDir, event }), event);
   const { attachments: fileAttachments, failures: fileFailures } = await resolveQqReplyFiles(reply, event);
   assertQqReplyScopeActive(options.replyScope);
   const message = await buildOneBotPrivateReplyMessage(reply, mediaPaths, { event, fileAttachments, fileFailures });
@@ -13787,7 +13792,7 @@ async function sendOneBotPrivateMessage(event, reply, options = {}) {
   const fileResults = [...fileFailures];
   for (const attachment of fileAttachments) {
     assertQqReplyScopeActive(options.replyScope);
-    fileResults.push(await uploadOneBotPrivateFile(event.senderId, attachment, { signal: options.replyScope?.signal }));
+    fileResults.push(await qqFileUploader.uploadFile({ userId: event.senderId }, attachment, { signal: options.replyScope?.signal }));
   }
 
   return combineOneBotSendResults(messageResult, fileResults);
@@ -14514,20 +14519,19 @@ function hasSendableOneBotMessage(message) {
   return (Array.isArray(message) ? message : []).some((segment) => segment?.type !== "reply");
 }
 
-async function uploadOneBotGroupFile(groupId, attachment, options = {}) {
-  return uploadOneBotFile("upload_group_file", {
-    group_id: Number(groupId),
-    file: attachment.path,
-    name: attachment.name || basename(attachment.path)
-  }, options);
-}
+const logQqCreatedFileStoreError = (error) => logger.warn("Unable to store QQ created file", { error }, "qq");
+const qqCreatedFiles = createQqCreatedFilesStore({ rootDir: qqCreatedFilesDir });
+const qqFileUploader = createQqFileUploader({
+  store: qqCreatedFiles,
+  callOneBot: uploadOneBotFile,
+  onError: logQqCreatedFileStoreError
+});
 
-async function uploadOneBotPrivateFile(userId, attachment, options = {}) {
-  return uploadOneBotFile("upload_private_file", {
-    user_id: Number(userId),
-    file: attachment.path,
-    name: attachment.name || basename(attachment.path)
-  }, options);
+function stageQqGeneratedReplyImages(target, mediaPaths, event) {
+  return stageQqReplyImages(qqCreatedFiles, target, mediaPaths, {
+    generatedDirs: [event.qqTaskWorkspace?.outputDir, qqOutputImagesDir],
+    onError: logQqCreatedFileStoreError
+  });
 }
 
 async function uploadOneBotFile(endpoint, payload, { signal } = {}) {

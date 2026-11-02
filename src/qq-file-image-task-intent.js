@@ -101,6 +101,8 @@ const imageBeforeCreate = new RegExp(`${imageNounPattern}.{0,48}${createVerbPatt
 const editBeforeImage = new RegExp(`${editVerbPattern}.{0,40}${imageNounPattern}`, "i");
 const imageBeforeEdit = new RegExp(`${imageNounPattern}.{0,48}${editVerbPattern}`, "i");
 const standaloneEdit = new RegExp(editVerbPattern, "i");
+// "画一张大肥鱼" names only the subject. 画个饼 is slang, not a drawing request.
+const drawCountedSubject = /(?<![漫动])画[一两三几]?[张幅个只条副](?!大?饼)/;
 const deliverImage = new RegExp(`${deliveryVerbSource}.{0,32}${imageNounPattern}`, "i");
 
 export function classifyQqImageTaskIntent(text, { hasImageReference = false } = {}) {
@@ -109,7 +111,7 @@ export function classifyQqImageTaskIntent(text, { hasImageReference = false } = 
     return { isCreation: false, isEdit: false, isDelivery: false, isImageOutput: false };
   }
 
-  const isCreation = createBeforeImage.test(normalized) || imageBeforeCreate.test(normalized);
+  const isCreation = createBeforeImage.test(normalized) || imageBeforeCreate.test(normalized) || drawCountedSubject.test(normalized);
   const isEdit = editBeforeImage.test(normalized)
     || imageBeforeEdit.test(normalized)
     || (hasImageReference && standaloneEdit.test(normalized));

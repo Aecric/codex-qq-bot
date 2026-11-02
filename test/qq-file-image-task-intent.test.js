@@ -54,3 +54,13 @@ test("routes explicit reference edits before the broad image-look fallback", () 
   assert.equal(shouldUseQqFileImageTask({ ...base, text: "看看这张图里有什么" }), false);
   assert.equal(shouldUseQqFileImageTask({ ...base, text: "编辑这张图片", isMentioned: false }), false);
 });
+
+test("drawing a counted subject is an image task even without an image noun", () => {
+  for (const request of ["画一张大肥鱼  参考这个", "画一只猫", "帮我画个龙娘", "画两幅山水"]) {
+    assert.equal(isQqImageOutputRequest(request), true, request);
+    assert.equal(isQqPublicImageGenerationRequest(request), true, request);
+  }
+  for (const request of ["别给我画个饼", "老板又画个大饼", "这部漫画一张都没看", "今天天气不错"]) {
+    assert.equal(isQqImageOutputRequest(request), false, request);
+  }
+});

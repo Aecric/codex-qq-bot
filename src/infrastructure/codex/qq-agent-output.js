@@ -1,5 +1,8 @@
+import { isSendableQqImagePath } from "../../qq-output-policy.js";
+
 const obsoleteControlPattern = /\[\[(?:qq_command|qq_menu|qq_done|qq_progress|qq_task_budget|qq_task_continue)(?::[^\]\n]*)?\]\]/gi;
 const legacyReplyTargetPattern = /\[\[qq_reply:[^\]\n]+\]\]/gi;
+const legacyFileMarkerPattern = /\[\[qq_file:([^\]\n|]+)(?:\|[^\]\n]*)?\]\]/g;
 
 // Property order is generation order: innerThought comes first so the model
 // forms its first-person reaction before writing anything visible (the
@@ -49,7 +52,7 @@ export const qqAgentOutputSchema = Object.freeze({
         additionalProperties: false,
         required: ["kind", "path", "name"],
         properties: {
-          kind: { type: "string", enum: ["image", "file"] },
+          kind: { type: "string", enum: ["image", "file"], description: "Pictures are always image, so QQ shows them as a picture rather than a file." },
           path: { type: "string", description: "Absolute path inside the current task output workspace." },
           name: { type: "string", description: "Optional display filename; empty for images/default names." }
         }
@@ -72,7 +75,9 @@ export function parseQqAgentOutput(value, { bubbleSeparator = "|||", scrubBubble
   if (!parsed) {
     return {
       structured: false,
-      output: stripObsoleteQqControlMarkers(raw),
+      output: stripObsoleteQqControlMarkers(raw).replace(legacyFileMarkerPattern, (marker, path) => (
+        isSendableQqImagePath(path.trim()) ? `[[qq_image:${path.trim()}]]` : marker
+      )),
       value: null
     };
   }
@@ -101,11 +106,12 @@ export function parseQqAgentOutput(value, { bubbleSeparator = "|||", scrubBubble
   for (const attachment of Array.isArray(parsed.attachments) ? parsed.attachments.slice(0, 8) : []) {
     const path = normalizeAbsoluteMarkerPath(attachment?.path);
     if (!path) continue;
-    if (attachment?.kind === "image") {
+    const kind = resolveQqAttachmentKind(attachment);
+    if (kind === "image") {
       directives.push(`[[qq_image:${path}]]`);
       continue;
     }
-    if (attachment?.kind === "file") {
+    if (kind === "file") {
       const name = normalizeAttachmentName(attachment?.name);
       directives.push(`[[qq_file:${path}${name ? `|${name}` : ""}]]`);
     }
@@ -120,6 +126,13 @@ export function parseQqAgentOutput(value, { bubbleSeparator = "|||", scrubBubble
     output: [visible, ...directives].filter(Boolean).join("\n").trim(),
     value: parsed
   };
+}
+
+// A picture goes out as a picture even when the model labels it a file.
+export function resolveQqAttachmentKind(attachment) {
+  return attachment?.kind === "file" && isSendableQqImagePath(String(attachment?.path || "").trim())
+    ? "image"
+    : attachment?.kind;
 }
 
 // The Bot's private reflection on a structured turn; never delivered.
