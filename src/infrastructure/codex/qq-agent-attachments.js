@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { copyFile, mkdir, open, readdir, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
-import { parseQqAgentOutput } from "./qq-agent-output.js";
+import { parseQqAgentOutput, resolveQqAttachmentKind } from "./qq-agent-output.js";
 import { isPathInside } from "../../qq-output-policy.js";
 
 const DEFAULT_MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -56,7 +56,11 @@ export async function materializeCodexGeneratedImageAttachments(value, {
   maxImageBytes = DEFAULT_MAX_IMAGE_BYTES,
   recoverUnlistedGeneratedImage = false
 } = {}) {
-  const attachments = Array.isArray(value?.attachments) ? value.attachments.slice(0, 8) : [];
+  const attachments = Array.isArray(value?.attachments)
+    ? value.attachments.slice(0, 8).map((attachment) => (
+      attachment && typeof attachment === "object" ? { ...attachment, kind: resolveQqAttachmentKind(attachment) } : attachment
+    ))
+    : [];
   const shouldRecoverUnlistedImage = Boolean(recoverUnlistedGeneratedImage)
     && value?.status !== "silent"
     && !attachments.some((attachment) => attachment?.kind === "image")
@@ -261,13 +265,16 @@ function reconcileRecoveredImageDeliveryText(value) {
 
 function removeObsoleteImageDeliveryFailure(value) {
   const text = String(value || "");
-  const deliveryFailureSegment = /(?=[^。！？!?\n]{0,240}(?:沙箱|附件输出目录|QQ\s*附件))(?=[^。！？!?\n]{0,240}(?:异常|失败|无法|不能|未能|没法))[^。！？!?\n]{1,240}[。！？!?]?/gi;
+  const deliveryFailureSegment = /(?=[^。！？!?\n]{0,240}(?:沙箱|附件|输出目录|发到群|发出去|发给你|发不出))(?=[^。！？!?\n]{0,240}(?:异常|失败|无法|不能|未能|没能|没法|发不出))[^。！？!?\n]{1,240}[。！？!?]?/gi;
   return text
-    .replace(deliveryFailureSegment, (segment) => (
-      /(?:图片|图像|成品)[^。！？!?\n]{0,40}(?:已生成|生成好|画好|做好)/i.test(segment)
+    .replace(deliveryFailureSegment, (segment) => {
+      // "大肥鱼画出来了，但没法发到群里": the opening clause is still true.
+      const lead = segment.match(/^([^，,]+)[，,]\s*(?:但|不过|可是|只是)/)?.[1];
+      if (lead && !/沙箱|附件|输出目录|异常|失败|无法|不能|未能|没能|没法|发不出/.test(lead)) return `${lead}。`;
+      return /(?:图片|图像|成品)[^。！？!?\n]{0,40}(?:已生成|生成好|画好|做好)/i.test(segment)
         ? "图片已生成。"
-        : ""
-    ))
+        : "";
+    })
     .replace(/生成结果已显示在当前任务中[。！？!?]?/g, "")
     .replace(/。{2,}/g, "。")
     .replace(/[ \t]+\n/g, "\n")

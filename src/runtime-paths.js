@@ -19,6 +19,8 @@ export function createRuntimePaths({
     qqStickerDir: env.CODEX_REMOTE_CONTACT_QQ_STICKER_DIR || join(projectDir, "data", "qq-stickers"),
     qqOutputImagesDir: env.CODEX_REMOTE_CONTACT_QQ_OUTPUT_IMAGE_DIR || join(projectDir, "runtime", "qq-output-images"),
     qqTaskWorkspacesDir: env.CODEX_REMOTE_CONTACT_QQ_TASK_WORKSPACE_DIR || join(projectDir, "runtime", "qq-task-workspaces"),
+    qqCreatedFilesDir: env.CODEX_REMOTE_CONTACT_QQ_CREATED_FILES_DIR || join(projectDir, "runtime", "tmp_create_files"),
+    napCatDockerEnvPath: env.CODEX_REMOTE_CONTACT_NAPCAT_ENV_FILE || join(projectDir, "runtime", "gateway", "napcat-docker", ".env"),
     codexSessionsDir: join(codexHomeDir, "sessions"),
     codexArchivedSessionsDir: join(codexHomeDir, "archived_sessions"),
     codexLogsDbPath: join(codexHomeDir, "logs_2.sqlite"),

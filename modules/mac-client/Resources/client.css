@@ -463,6 +463,27 @@ select { appearance: none; padding-right: 30px; background-image: linear-gradien
 .status-banner.critical .status-banner-icon { background: var(--bad-soft); }
 .status-banner.critical .status-banner-icon::after { background: var(--bad); }
 @keyframes status-pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--ok) 0%, transparent); } }
+.napcat-login {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  border-color: color-mix(in srgb, var(--bad) 35%, var(--border));
+}
+.napcat-login[hidden] { display: none; }
+.napcat-login-copy { display: grid; gap: 8px; justify-items: start; min-width: 0; }
+.napcat-login-copy h2 { font-size: 16px; }
+.napcat-login-copy p { color: var(--muted); font-size: 13px; }
+.napcat-login-copy .napcat-login-error { color: var(--bad); }
+.napcat-qr-frame {
+  display: grid; place-items: center; flex: none;
+  width: 196px; height: 196px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: #fff; overflow: hidden;
+}
+.napcat-qr-frame[hidden], .napcat-login img[hidden], .napcat-login span[hidden], .napcat-login p[hidden], .napcat-login button[hidden] { display: none; }
+.napcat-qr-frame img { display: block; width: 100%; height: 100%; }
+@media (max-width: 600px) {
+  .napcat-login { flex-direction: column; align-items: stretch; }
+  .napcat-qr-frame { align-self: center; }
+}
 .status-banner-copy { flex: 1; min-width: 0; }
 .status-banner-copy strong { font-size: 15px; }
 .status-banner-copy p { color: var(--muted); font-size: 13px; }

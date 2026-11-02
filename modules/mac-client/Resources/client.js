@@ -37,6 +37,7 @@ const translations = {
     runtimeSummary: "运行摘要", serviceHealth: "服务状态", serviceHealthHint: "Hub 与各个依赖的实时健康度", checkNow: "立即检查",
     usageWindow: "Codex 用量", latencyTitle: "接口响应", waitingSamples: "等待首个样本", sampleCount: "最近 {count} 次采样", now: "现在",
     recentActivity: "最近活动", recentActivityHint: "最近的 QQ 消息与回复", openLogs: "查看日志", noRecentActivity: "还没有最近活动。",
+    napcatSessionLostTitle: "QQ 连接断了，收不到消息", napcatSessionLostBody: "NapCat 还显示在线，但已经连不上 QQ 服务器。重启 NapCat 即可恢复；如果登录已失效，这里会接着显示二维码。", napcatRestart: "重启 NapCat", napcatRestarting: "正在重启 NapCat…", napcatLoginTitle: "QQ 掉线了，需要重新登录", napcatLoginBody: "打开手机 QQ，扫下面的二维码并确认。登录成功后这里会自动消失。", napcatLoginBodyAccount: "用机器人 QQ {account} 打开手机 QQ，扫二维码并确认。登录成功后这里会自动消失。", napcatLoggingInTitle: "正在登录 QQ", napcatLoggingInBody: "已经收到登录请求，请稍等；如果手机上还有确认提示，请点确认。", napcatDownTitle: "NapCat 没有响应", napcatDownBody: "暂时拿不到登录二维码。请先启动 NapCat（本机可运行 start-astra.sh），恢复后这里会显示二维码。", napcatNotConfiguredBody: "OneBot 连不上，也没有配置 NAPCAT_WEBUI_TOKEN，所以无法显示二维码。请到 NapCat 管理页扫码登录。", napcatAuthFailedBody: "NapCat WebUI 拒绝了当前 token，无法获取二维码。请检查 NAPCAT_WEBUI_TOKEN。", napcatLoginErrorPrefix: "NapCat 提示：{message}", napcatLoginWarning: "谁扫码，机器人就会登录成谁的 QQ，请用机器人账号扫。", napcatQrRefresh: "刷新二维码", napcatQrPending: "正在获取二维码…", napcatQrAlt: "QQ 登录二维码",
     systemReady: "一切正常", systemReadyBody: "所有服务在线，{engine} 随时可以回复消息。", systemAttention: "部分功能未启用", systemAttentionBody: "{items} 当前未启用，其余功能不受影响。", systemCritical: "有服务需要处理", systemCriticalBody: "{items} 状态异常，先看下方的服务详情。",
     uptime: "运行时长", servicesOnline: "在线服务", activeTasks: "进行中", pendingTasks: "排队中", startedAtHint: "启动于 {time}", queueHint: "上限 {max}",
     serviceHub: "Hub", serviceOneBot: "OneBot", serviceQq: "QQ 通道", serviceWeb: "联网查询",
@@ -124,6 +125,7 @@ const translations = {
     runtimeSummary: "Runtime summary", serviceHealth: "Services", serviceHealthHint: "Live health of the Hub and its dependencies", checkNow: "Check now",
     usageWindow: "Codex usage", latencyTitle: "API response", waitingSamples: "Waiting for the first sample", sampleCount: "Samples: {count}", now: "Now",
     recentActivity: "Recent activity", recentActivityHint: "Latest QQ messages and replies", openLogs: "Open logs", noRecentActivity: "No recent activity yet.",
+    napcatSessionLostTitle: "QQ connection lost, messages are not arriving", napcatSessionLostBody: "NapCat still reports online but cannot reach the QQ servers. Restarting NapCat restores it; if the login has expired, a QR code appears here next.", napcatRestart: "Restart NapCat", napcatRestarting: "Restarting NapCat…", napcatLoginTitle: "QQ is offline and needs to sign in again", napcatLoginBody: "Open QQ on your phone, scan the code and confirm. This card disappears once you are signed in.", napcatLoginBodyAccount: "Open QQ on your phone as the bot account {account}, scan the code and confirm. This card disappears once you are signed in.", napcatLoggingInTitle: "Signing in to QQ", napcatLoggingInBody: "The sign-in request was received. If your phone asks for confirmation, confirm it there.", napcatDownTitle: "NapCat is not responding", napcatDownBody: "The sign-in QR code is unavailable. Start NapCat first (run start-astra.sh on this machine); the code appears here once it is back.", napcatNotConfiguredBody: "OneBot is unreachable and NAPCAT_WEBUI_TOKEN is not configured, so no QR code can be shown. Sign in from the NapCat management page.", napcatAuthFailedBody: "The NapCat WebUI rejected the token, so no QR code can be fetched. Check NAPCAT_WEBUI_TOKEN.", napcatLoginErrorPrefix: "NapCat says: {message}", napcatLoginWarning: "Whoever scans this signs the bot in as their own QQ, so scan with the bot account.", napcatQrRefresh: "Refresh QR code", napcatQrPending: "Fetching the QR code…", napcatQrAlt: "QQ sign-in QR code",
     systemReady: "All systems normal", systemReadyBody: "Every service is online and {engine} is ready to reply.", systemAttention: "Some features are off", systemAttentionBody: "{items} disabled; everything else keeps working.", systemCritical: "A service needs attention", systemCriticalBody: "{items} unhealthy. Check the service details below.",
     uptime: "Uptime", servicesOnline: "Services online", activeTasks: "In progress", pendingTasks: "Queued", startedAtHint: "Started {time}", queueHint: "Limit {max}",
     serviceHub: "Hub", serviceOneBot: "OneBot", serviceQq: "QQ channel", serviceWeb: "Web lookup",
@@ -240,7 +242,8 @@ const app = (() => {
     logScrollTop: restoredUiState.logScrollTop || 0,
     apiToken: readStorage(sessionStorage, "apiToken") || "",
     authPromptPromise: null,
-    lastFetch: { state: 0, maintenance: 0, memory: 0, logs: 0 },
+    lastFetch: { state: 0, maintenance: 0, memory: 0, logs: 0, napcatLogin: 0, napcatQr: 0 },
+    napcatLogin: null,
     logCategories: new Set(["system", "qq", "onebot", "agent", "search", "interest", "learning", "memory", "lifecycle"]),
     commandIndex: 0,
     connectionOk: false,
@@ -923,11 +926,13 @@ function getServices() {
     return ["onebot", "agent", "qq", "web"].map((id) => ({ id, state: "pending" }));
   }
   const qqEnabled = Boolean(h.channels?.qq);
+  // OneBot can keep answering after QQ has kicked the account offline.
+  const qqConnected = Boolean(h.oneBot?.ok) && !["needs_login", "logging_in", "session_lost", "down"].includes(h.napcat?.state);
   const qqBusy = Number(h.qq?.activeGenerations || 0) > 0 || Number(h.qq?.pendingReplies || 0) > 0;
   return [
-    { id: "onebot", state: h.oneBot?.ok ? "ok" : "bad" },
+    { id: "onebot", state: qqConnected ? "ok" : "bad" },
     { id: "agent", state: getEngineState(engine) },
-    { id: "qq", state: !qqEnabled ? "off" : !h.oneBot?.ok ? "bad" : qqBusy ? "busy" : "ok" },
+    { id: "qq", state: !qqEnabled ? "off" : !qqConnected ? "bad" : qqBusy ? "busy" : "ok" },
     { id: "web", state: !h.webLookup?.enabled ? "off" : h.webLookup?.lastOk === false ? "bad" : "ok" }
   ];
 }
@@ -943,6 +948,7 @@ function stateLabel(state) {
 
 function renderOverview() {
   renderStatusBanner();
+  renderNapCatLogin();
   renderOverviewStats();
   renderServiceList();
   renderEngineCard();
@@ -973,6 +979,86 @@ function renderStatusBanner() {
   } else {
     $("#statusTitle").textContent = t("systemReady");
     $("#statusBody").textContent = t("systemReadyBody", { engine });
+  }
+}
+
+function getNapCatStatus() {
+  const reported = app.maintenance?.napcat;
+  return isNapCatSignInPending(reported?.state) && app.napcatLogin ? app.napcatLogin : reported;
+}
+
+function isNapCatSignInPending(state) {
+  return state === "needs_login" || state === "logging_in";
+}
+
+function renderNapCatLogin() {
+  const status = getNapCatStatus();
+  const root = $("#napcatLogin");
+  root.hidden = !status || status.state === "ok";
+  if (root.hidden) return;
+  const needsLogin = status.state === "needs_login";
+  const downBodies = { not_configured: "napcatNotConfiguredBody", auth_failed: "napcatAuthFailedBody" };
+  const sessionLost = status.state === "session_lost";
+  $("#napcatLoginTitle").textContent = t(needsLogin ? "napcatLoginTitle" : sessionLost ? "napcatSessionLostTitle" : status.state === "logging_in" ? "napcatLoggingInTitle" : "napcatDownTitle");
+  $("#napcatLoginBody").textContent = needsLogin
+    ? (status.account ? t("napcatLoginBodyAccount", { account: status.account }) : t("napcatLoginBody"))
+    : sessionLost ? t("napcatSessionLostBody")
+    : status.state === "logging_in" ? t("napcatLoggingInBody") : t(downBodies[status.reason] || "napcatDownBody");
+  const message = status.refreshError || status.loginError;
+  $("#napcatLoginError").hidden = !message;
+  $("#napcatLoginError").textContent = message ? t("napcatLoginErrorPrefix", { message }) : "";
+  $("#napcatLoginWarning").hidden = !needsLogin;
+  $("#napcatQrRefresh").hidden = !needsLogin;
+  $("#napcatQrRefresh").disabled = app.busyKeys.has("napcat-qr");
+  const restarting = app.busyKeys.has("napcat-restart");
+  $("#napcatRestart").hidden = !sessionLost;
+  $("#napcatRestart").disabled = restarting;
+  $("#napcatRestart").textContent = t(restarting ? "napcatRestarting" : "napcatRestart");
+  $("#napcatQrFrame").hidden = !needsLogin;
+  const image = $("#napcatQrImage");
+  image.hidden = !status.qrImage;
+  if (status.qrImage && image.getAttribute("src") !== status.qrImage) image.src = status.qrImage;
+  $("#napcatQrPending").hidden = Boolean(status.qrImage);
+}
+
+async function restartNapCat() {
+  app.busyKeys.add("napcat-restart");
+  renderNapCatLogin();
+  try {
+    await api("/api/napcat/restart", { method: "POST", body: "{}" }, { retryAuth: false });
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    app.busyKeys.delete("napcat-restart");
+  }
+  await refreshMaintenance({ quiet: true, force: true }).catch(() => undefined);
+}
+
+async function refreshNapCatLogin({ renew = false } = {}) {
+  app.lastFetch.napcatLogin = Date.now();
+  if (renew) {
+    app.lastFetch.napcatQr = Date.now();
+    app.busyKeys.add("napcat-qr");
+    renderNapCatLogin();
+  }
+  try {
+    app.napcatLogin = renew
+      ? await api("/api/napcat/login/qrcode", { method: "POST", body: "{}" }, { retryAuth: false })
+      : await api("/api/napcat/login", {}, { key: "napcat-login", retryAuth: false });
+    if (app.napcatLogin.state === "ok") {
+      app.napcatLogin = null;
+      await refreshMaintenance({ quiet: true, force: true });
+    }
+  } catch (error) {
+    if (error.name !== "AbortError" && renew) showToast(error.message, "error");
+  } finally {
+    if (renew) app.busyKeys.delete("napcat-qr");
+  }
+  renderNapCatLogin();
+  // A kicked-off account has no QR code until NapCat is asked for one.
+  if (!renew && app.napcatLogin?.state === "needs_login" && !app.napcatLogin.qrImage
+    && Date.now() - app.lastFetch.napcatQr >= 15_000) {
+    await refreshNapCatLogin({ renew: true });
   }
 }
 
@@ -2892,6 +2978,8 @@ document.addEventListener("keydown", (event) => {
 
 $("#refreshButton").addEventListener("click", () => refreshView().catch(() => undefined));
 $("#offlineRetry").addEventListener("click", () => refreshView().catch(() => undefined));
+$("#napcatQrRefresh").addEventListener("click", () => void refreshNapCatLogin({ renew: true }));
+$("#napcatRestart").addEventListener("click", () => void restartNapCat());
 $("#refreshHealth").addEventListener("click", () => refreshMaintenance({ force: true }).catch(() => undefined));
 $("#refreshMemory").addEventListener("click", () => refreshMemory().catch(() => undefined));
 $("#refreshLogs").addEventListener("click", () => refreshLogs().catch(() => undefined));
@@ -3178,6 +3266,11 @@ setInterval(() => {
   const now = Date.now();
   const base = app.refreshSeconds * 1_000;
   if (app.view === "activity" && app.liveLogs && !app.controllers.has("logs") && now - app.lastFetch.logs >= 1_000) void refreshLogs({ quiet: true }).catch(() => undefined);
+  // Sign-in polling ignores auto-refresh: the card must clear itself after a scan.
+  if (app.view === "overview" && isNapCatSignInPending(app.maintenance?.napcat?.state)
+    && !app.controllers.has("napcat-login") && !app.busyKeys.has("napcat-qr") && now - app.lastFetch.napcatLogin >= 3_000) {
+    void refreshNapCatLogin();
+  }
   if (!app.autoRefresh) return;
   if (!app.controllers.has("state") && now - app.lastFetch.state >= base) void refreshState({ quiet: true }).catch(() => undefined);
   if (!app.controllers.has("maintenance") && now - app.lastFetch.maintenance >= base) void refreshMaintenance({ quiet: true }).catch(() => undefined);

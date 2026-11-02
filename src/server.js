@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { access, copyFile, mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { networkInterfaces } from "node:os";
-import { basename, extname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { brotliDecompress } from "node:zlib";
 import { promisify } from "node:util";
@@ -67,8 +67,18 @@ import {
 } from "./qq-file-image-task-intent.js";
 import { resolveAllowedQqMarkerPath, resolveQqMarkerPath } from "./qq-output-policy.js";
 import { resolveQqReplyFileAttachments } from "./qq-reply-files.js";
+import { createQqCreatedFilesStore, createQqFileUploader, stageQqReplyImages } from "./qq-created-files.js";
+import {
+  buildNapCatLoginResponse,
+  createNapCatLoginClient,
+  createQqSessionProbe,
+  readEnvFileValue,
+  readSessionProbeResponse,
+  restartNapCatDockerContainer
+} from "./napcat-login.js";
 import { parseQqAgentOutputWithAttachmentImport } from "./infrastructure/codex/qq-agent-attachments.js";
 import { scrubQqReplyBubbles } from "./qq-reply-scrub.js";
+import { formatQqSearchResultSource, rewriteQqReplyLinksAsSources } from "./qq-reply-links.js";
 import { createCodexInterestFetch } from "./infrastructure/codex/codex-interest-fetch.js";
 import { createQqEngagedWindows } from "./qq-engaged-window.js";
 import { createQqTaskPleadingTracker, formatQqTaskPleadingContext, formatQqTaskRecord } from "./qq-task-pleading.js";
@@ -443,7 +453,7 @@ import {
 } from "./unified-memory/qq-person-memory.js";
 import { createWebSearch, formatWebSearchProviderName } from "./web-search.js";
 import { isSupportedImageContentType, readResponseJson, writeResponseBodyToFile } from "./bounded-stream.js";
-import { runJsonProcess } from "./process-runner.js";
+import { runJsonProcess, runProcess } from "./process-runner.js";
 import { createDashboardAssetHandler } from "./dashboard-assets.js";
 import { createAssistantProfileStore, fitAssistantProfile } from "./dashboard-character-card.js";
 import {
@@ -513,6 +523,8 @@ const {
   qqStickerDir,
   qqOutputImagesDir,
   qqTaskWorkspacesDir,
+  qqCreatedFilesDir,
+  napCatDockerEnvPath,
   dataDir,
   codexSessionsDir,
   codexArchivedSessionsDir,
@@ -551,6 +563,8 @@ const {
   logConsoleLevels,
   safeFetchMode,
   oneBotApiBase,
+  napCatWebUiBase,
+  napCatWebUiToken,
   oneBotAccessToken,
   environmentManagementApiToken,
   oneBotRequestTimeoutMs,
@@ -3565,6 +3579,7 @@ async function buildMaintenanceStatus({ force = false } = {}) {
     activeAgent.reportsQuota ? getCachedCodexQuotaSnapshot({ force }) : state.maintenance.codex.quota,
     checkOneBotHealth({ force })
   ]);
+  const { qrImage: _qrImage, ...napcat } = await buildNapCatLoginStatus(await napCatLogin.readLogin());
   const webLookupProviderPlan = buildWebSearchProviderPlan();
   const timeoutPolicies = getCodexTaskTimeoutPolicyMap(codexTaskTimeouts, state.ai.reasoningEffort);
   const { path: _privateCodexPath, ...codexMaintenance } = state.maintenance.codex;
@@ -3573,6 +3588,7 @@ async function buildMaintenanceStatus({ force = false } = {}) {
   return {
     startedAt: state.maintenance.startedAt,
     oneBot: { ...state.maintenance.oneBot },
+    napcat,
     webLookup: {
       ...state.maintenance.webLookup,
       providerPreset: qqWebSearchPreset,
@@ -4128,6 +4144,41 @@ function normalizeRateLimitWindow(window) {
     resetsAt,
     windowMinutes
   };
+}
+
+const napCatLogin = createNapCatLoginClient({
+  baseUrl: napCatWebUiBase,
+  loadToken: () => napCatWebUiToken || readEnvFileValue(napCatDockerEnvPath, "WEBUI_TOKEN")
+});
+let lastNapCatLoginState = null;
+const qqSessionProbe = createQqSessionProbe({
+  probe: async () => {
+    const selfId = state.maintenance.oneBot.selfId;
+    if (!selfId) return null;
+    try {
+      const response = await oneBotFetch("get_stranger_info", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ user_id: Number(selfId), no_cache: true })
+      });
+      return readSessionProbeResponse(response, await readResponseJson(response).catch(() => ({})));
+    } catch (error) {
+      // A timeout is what a dead session looks like; anything else is OneBot being down.
+      return error?.name === "TimeoutError" || error?.name === "AbortError" ? false : null;
+    }
+  }
+});
+
+async function buildNapCatLoginStatus(login) {
+  if (login.isLogin && !state.maintenance.oneBot.ok) await checkOneBotHealth({ force: true });
+  if (login.isLogin && state.maintenance.oneBot.ok) void qqSessionProbe.check();
+  else qqSessionProbe.reset();
+  const response = buildNapCatLoginResponse(login, state.maintenance.oneBot, { sessionLost: qqSessionProbe.isLost() });
+  if (lastNapCatLoginState !== null && lastNapCatLoginState !== response.state) {
+    logger.warn("NapCat login state changed", { from: lastNapCatLoginState, to: response.state }, "onebot");
+  }
+  lastNapCatLoginState = response.state;
+  return response;
 }
 
 let oneBotHealthCheckPromise = null;
@@ -8967,7 +9018,7 @@ async function executeQqBotWebSearchCommand(command, event = null) {
         ...results.slice(0, 6).map((result, index) => [
           `${index + 1}. ${result.title}`,
           result.snippet ? `摘要：${result.snippet}` : null,
-          result.url ? `链接：${result.url}` : null
+          formatQqSearchResultSource(result)
         ].filter(Boolean).join("\n"))
       ].join("\n")
     };
@@ -10365,13 +10416,16 @@ async function buildModelReply(event, { replyScope = null } = {}) {
       outputDir: taskWorkspace.outputDir,
       generatedAfterMs: turnStartedAt,
       maxImageBytes: qqImageMaxBytes,
+      // The native image tool is also available here, and a group turn has no
+      // shell to copy its result into the output directory itself.
+      recoverUnlistedGeneratedImage: true,
       scrubBubbles: state.qq.behavior.replyScrubEnabled ? scrubQqReplyBubbles : null
     });
     logQqGeneratedAttachmentImport(parsed, event, result);
     event.qqAgentStructuredOutput = parsed.structured;
     // The last completed attempt (after any fusion) is the turn's inner state.
     event.qqAgentInnerState = extractQqAgentInnerState(parsed.value);
-    return parsed.output;
+    return rewriteQqEventReplyLinks(parsed.output, event);
   };
   const buildReplyPrompt = async (
     memoryBlock,
@@ -11040,7 +11094,7 @@ async function buildQqOwnerFileImageReply(event, { replyScope = null } = {}) {
     });
     logQqGeneratedAttachmentImport(parsed, event, result);
     event.qqAgentStructuredOutput = parsed.structured;
-    const normalized = await normalizeQqImageGenerationReply(parsed.output, {
+    const normalized = await normalizeQqImageGenerationReply(rewriteQqEventReplyLinks(parsed.output, event), {
       event,
       isImageGeneration,
       taskStartedAt,
@@ -11052,6 +11106,13 @@ async function buildQqOwnerFileImageReply(event, { replyScope = null } = {}) {
     event.imagePaths = imagePaths;
   }
 }
+function rewriteQqEventReplyLinks(reply, event) {
+  return rewriteQqReplyLinksAsSources(reply, {
+    requestText: event.text,
+    allowedUrls: extractQqUrls(analyzeQqConversationIntent(event).links, event.replyContext?.text)
+  });
+}
+
 async function normalizeQqImageGenerationReply(reply, { event, isImageGeneration, taskStartedAt, outputDir } = {}) {
   const text = String(reply || "").trim();
   if (!isImageGeneration) return text;
@@ -11450,7 +11511,7 @@ async function buildWebLookupContext(event) {
       ...results.map((result, index) => [
         `${index + 1}. ${result.title}`,
         result.snippet ? `摘要：${result.snippet}` : null,
-        result.url ? `链接：${result.url}` : null
+        formatQqSearchResultSource(result)
       ].filter(Boolean).join("\n"))
     ].join("\n");
   } catch (error) {
@@ -13549,7 +13610,7 @@ async function sendOneBotGroupReply(event, reply, options = {}) {
 async function sendOneBotGroupMessage(event, reply, options = {}) {
   if (!event.groupId) return { ok: false, reason: "Missing group id" };
   assertQqReplyScopeActive(options.replyScope);
-  const mediaPaths = await resolveQqReplyMedia(reply, { stickerDir: qqStickerDir, event });
+  const mediaPaths = await stageQqGeneratedReplyImages({ groupId: event.groupId }, await resolveQqReplyMedia(reply, { stickerDir: qqStickerDir, event }), event);
   const { attachments: fileAttachments, failures: fileFailures } = await resolveQqReplyFiles(reply, event);
   assertQqReplyScopeActive(options.replyScope);
   const message = await buildOneBotReplyMessage(event, reply, options, mediaPaths, { fileAttachments, fileFailures });
@@ -13579,7 +13640,7 @@ async function sendOneBotGroupMessage(event, reply, options = {}) {
   const fileResults = [...fileFailures];
   for (const attachment of fileAttachments) {
     assertQqReplyScopeActive(options.replyScope);
-    fileResults.push(await uploadOneBotGroupFile(event.groupId, attachment, { signal: options.replyScope?.signal }));
+    fileResults.push(await qqFileUploader.uploadFile({ groupId: event.groupId }, attachment, { signal: options.replyScope?.signal }));
   }
 
   return combineOneBotSendResults(messageResult, fileResults);
@@ -13701,7 +13762,7 @@ async function sendOneBotPrivateReply(event, reply, options = {}) {
 async function sendOneBotPrivateMessage(event, reply, options = {}) {
   if (!event.senderId) return { ok: false, reason: "Missing user id" };
   assertQqReplyScopeActive(options.replyScope);
-  const mediaPaths = await resolveQqReplyMedia(reply, { stickerDir: qqStickerDir, event });
+  const mediaPaths = await stageQqGeneratedReplyImages({ userId: event.senderId }, await resolveQqReplyMedia(reply, { stickerDir: qqStickerDir, event }), event);
   const { attachments: fileAttachments, failures: fileFailures } = await resolveQqReplyFiles(reply, event);
   assertQqReplyScopeActive(options.replyScope);
   const message = await buildOneBotPrivateReplyMessage(reply, mediaPaths, { event, fileAttachments, fileFailures });
@@ -13731,7 +13792,7 @@ async function sendOneBotPrivateMessage(event, reply, options = {}) {
   const fileResults = [...fileFailures];
   for (const attachment of fileAttachments) {
     assertQqReplyScopeActive(options.replyScope);
-    fileResults.push(await uploadOneBotPrivateFile(event.senderId, attachment, { signal: options.replyScope?.signal }));
+    fileResults.push(await qqFileUploader.uploadFile({ userId: event.senderId }, attachment, { signal: options.replyScope?.signal }));
   }
 
   return combineOneBotSendResults(messageResult, fileResults);
@@ -14458,20 +14519,19 @@ function hasSendableOneBotMessage(message) {
   return (Array.isArray(message) ? message : []).some((segment) => segment?.type !== "reply");
 }
 
-async function uploadOneBotGroupFile(groupId, attachment, options = {}) {
-  return uploadOneBotFile("upload_group_file", {
-    group_id: Number(groupId),
-    file: attachment.path,
-    name: attachment.name || basename(attachment.path)
-  }, options);
-}
+const logQqCreatedFileStoreError = (error) => logger.warn("Unable to store QQ created file", { error }, "qq");
+const qqCreatedFiles = createQqCreatedFilesStore({ rootDir: qqCreatedFilesDir });
+const qqFileUploader = createQqFileUploader({
+  store: qqCreatedFiles,
+  callOneBot: uploadOneBotFile,
+  onError: logQqCreatedFileStoreError
+});
 
-async function uploadOneBotPrivateFile(userId, attachment, options = {}) {
-  return uploadOneBotFile("upload_private_file", {
-    user_id: Number(userId),
-    file: attachment.path,
-    name: attachment.name || basename(attachment.path)
-  }, options);
+function stageQqGeneratedReplyImages(target, mediaPaths, event) {
+  return stageQqReplyImages(qqCreatedFiles, target, mediaPaths, {
+    generatedDirs: [event.qqTaskWorkspace?.outputDir, qqOutputImagesDir],
+    onError: logQqCreatedFileStoreError
+  });
 }
 
 async function uploadOneBotFile(endpoint, payload, { signal } = {}) {
@@ -14802,6 +14862,30 @@ async function handleApi(req, res) {
     return sendJson(res, 200, await buildMaintenanceStatus({
       force: requestUrl.searchParams.get("force") === "1"
     }));
+  }
+
+  if (req.method === "GET" && req.url === "/api/napcat/login") {
+    return sendJson(res, 200, await buildNapCatLoginStatus(await napCatLogin.readLogin()));
+  }
+
+  if (req.method === "POST" && req.url === "/api/napcat/restart") {
+    if (!trustedLoopbackRequest) {
+      return sendJson(res, 403, { error: "NapCat can only be restarted from this computer" });
+    }
+    const status = await buildNapCatLoginStatus(await napCatLogin.readLogin());
+    if (status.state !== "session_lost") return sendJson(res, 409, { error: "NapCat is not in a state that needs a restart" });
+    const restart = await restartNapCatDockerContainer({ composeDir: dirname(napCatDockerEnvPath), run: runProcess });
+    if (!restart.ok) {
+      logger.warn("NapCat restart failed", { error: restart.error }, "onebot");
+      return sendJson(res, 502, { error: "重启 NapCat 失败，请手动重启容器。" });
+    }
+    qqSessionProbe.reset();
+    logger.info("NapCat restarted from the dashboard", {}, "onebot");
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (req.method === "POST" && req.url === "/api/napcat/login/qrcode") {
+    return sendJson(res, 200, await buildNapCatLoginStatus(await napCatLogin.refreshQrcode()));
   }
 
   if (req.method === "GET" && requestUrl.pathname === "/api/logs") {

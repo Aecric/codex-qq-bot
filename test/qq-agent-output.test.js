@@ -88,3 +88,26 @@ test("a structured sticker becomes its own final bubble and inner state is never
   });
   assert.deepEqual(extractQqAgentInnerState(null), { innerThought: "", mood: "", silent: false });
 });
+
+test("pictures labelled as files are delivered as pictures", () => {
+  const parsed = parseQqAgentOutput(JSON.stringify({
+    status: "reply", text: "好了", bubbles: [], reply: { mode: "automatic", targetUserId: "" },
+    attachments: [
+      { kind: "file", path: "/tmp/task/output/a.PNG", name: "鱼.png" },
+      { kind: "file", path: "/tmp/task/output/b.gif", name: "" },
+      { kind: "file", path: "/tmp/task/output/c.pdf", name: "报告.pdf" },
+      { kind: "file", path: "/tmp/task/output/d.svg", name: "" }
+    ]
+  }));
+  assert.match(parsed.output, /\[\[qq_image:\/tmp\/task\/output\/a\.PNG\]\]/);
+  assert.match(parsed.output, /\[\[qq_image:\/tmp\/task\/output\/b\.gif\]\]/);
+  assert.match(parsed.output, /\[\[qq_file:\/tmp\/task\/output\/c\.pdf\|报告\.pdf\]\]/);
+  assert.match(parsed.output, /\[\[qq_file:\/tmp\/task\/output\/d\.svg\]\]/);
+  assert.doesNotMatch(parsed.output, /qq_file:[^\]]*\.(?:PNG|gif)/);
+});
+
+test("legacy unstructured file markers for pictures become picture markers", () => {
+  const parsed = parseQqAgentOutput("好了\n[[qq_file:/tmp/a.jpg|鱼.jpg]]\n[[qq_file:/tmp/b.zip|包.zip]]");
+  assert.equal(parsed.structured, false);
+  assert.equal(parsed.output, "好了\n[[qq_image:/tmp/a.jpg]]\n[[qq_file:/tmp/b.zip|包.zip]]");
+});

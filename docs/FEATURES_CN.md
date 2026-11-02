@@ -148,6 +148,9 @@ Codex 时限按任务类型选择，而不是所有工作共用一个常量。`l
 - 触发消息或其明确引用里带文件时，Hub 只检测而不自动下载。模型只看到本轮 selector、安全文件名、声明大小和来源，看不到 QQ `file_id` 或临时 URL；仅在确实需要读取内容时才可调用 `qq_context.download_file`。Hub 随后查询 NapCat 群聊/私聊文件 URL，经过安全 URL 与流式大小限制后只写入本轮 `input/`；任意编号、URL、路径、超限载荷和未完成临时文件都会被拒绝。
 - 回复模型通过结构化最终输出 attachments 请求图片或文件投递，只有 Hub 会把通过校验的项目转换为旧版 `[[qq_image:...]]` / `[[qq_file:...]]` 发送计划。表情包通过结构化 `sticker` 字段选择，在文字之后作为单独一条气泡发送，正文为空时单独发送；由 Hub 转换成受 catalog 限制的 `[[qq_sticker:...]]` marker。正文里的旧 marker 仍然兼容。
 - 文件/生成图任务使用 `runtime/qq-task-workspaces/<request>/input|output`。原生 Codex 生成在 `.codex/generated_images/<当前线程>/` 下的图片，只有同时满足“本轮新建、当前线程、普通文件、未通过符号链接逃逸、未超图片大小限制、PNG/JPEG/GIF/WebP 真实签名”时，才会复制进活动任务 `output/`。明确生图任务已经生成图片却漏填最终附件时，Hub 只回收同一本轮线程中最新的有效图片。普通文件绝不自动导入：下载输入保留在 `input/`，回传文件必须创建或复制到同一请求的 `output/`；最终投递会在调用 `upload_group_file` / `upload_private_file` 前重新校验，阻止任意本地文件泄露、旧线程复用和符号链接逃逸。
+- 仪表盘总览会检查 NapCat 的登录状态。QQ 未登录或被踢下线（即使 OneBot `get_login_info` 仍然成功）时，总览显示提示和登录二维码，扫码成功后提示自动消失；NapCat 没有响应时显示启动提示。Hub 通过 NapCat WebUI 读取状态和二维码，地址用 `NAPCAT_WEBUI_BASE` 设置（默认 `http://127.0.0.1:6099`），token 用 `NAPCAT_WEBUI_TOKEN` 设置，未设置时读取 `runtime/gateway/napcat-docker/.env` 的 `WEBUI_TOKEN`（路径可用 `CODEX_REMOTE_CONTACT_NAPCAT_ENV_FILE` 修改）。账号在线时 Hub 不会请求二维码。NapCat 可能在 QQ 登录失效后仍报告在线，所以总览打开时 Hub 每分钟用 `get_stranger_info` 探测一次 QQ 服务器，连续两次失败就提示连接已断开，并提供“重启 NapCat”按钮（只能在本机操作，执行 `docker compose restart`，要求 NapCat 用 Docker 部署）。
+- 图片（png、jpg、jpeg、webp、gif）一律作为图片消息发送，即使模型把它标成文件。普通回复里用原生工具生成的图片，即使模型没有列进 attachments，也会按当前线程、本轮新建等同样的校验导入并发送，同时去掉“发不出去”这类已失效的说法。“画一张 X”“画个 X”这类没有“图”字的说法也算图片任务。
+- Hub 发送前把本轮生成的文件和图片复制到 `runtime/tmp_create_files/<QQ_ID>/<时间>-<随机串>-<文件名>` 再从这里发送，`<QQ_ID>` 群聊为群号、私聊为对方 QQ 号；贴纸和远程图片不复制。这里的文件不随任务工作区删除，也不会自动清理。目录可用 `CODEX_REMOTE_CONTACT_QQ_CREATED_FILES_DIR` 修改；NapCat 跑在 Docker 时，必须把该目录按相同路径只读挂载进容器。
 - 普通聊天和专门文件任务都会明确提供本轮工作区、输入与输出目录；长期会话每轮刷新路径。被目录校验拒绝的文件会产生中文提示、警告日志和失败回执，不会因为文字发送成功就被记为附件已送达。
 - 本地贴纸、QQ 账号收藏和下载元数据组成一个 catalog，不再列进提示词，提示词里只有总数。`qq_sticker.manage` 按情绪、场合或梗搜索（先看标签，再看名称和描述，最近发过的排后），返回由贴纸身份生成的稳定 `#编号`。`inspect` 在同一次工具结果里把贴纸（动图为抽取的帧）作为真实视觉输入返回，标签按模型实际看到的内容写入，并单独保存。配置了联网查询时，库外的表情包可用 `qq_search.images` 搜索。
 - 在已有回复生命周期中，模型可以决定是否收藏当前贴纸；普通未触发贴纸不会单独调用模型。
@@ -183,6 +186,8 @@ Codex 时限按任务类型选择，而不是所有工作共用一个常量。`l
 ## 联网搜索
 
 Hub 自带 QQ 联网查询，不依赖当前聊天界面的浏览工具。支持按配置顺序尝试 Tavily、Bing、百度、360、搜狗和 DuckDuckGo；预设包括 `balanced`、`china`、`global`、`tavily` 和 `privacy`。查询结果作为非可信资料进入 Agent，不能覆盖原始用户权限或系统规则。
+
+Bot 的回复只标注来源网站，不贴网址：Hub 的查询结果只给模型来源站点，发送前还会把回复里的网址改写成来源。对方明确要链接（消息含“链接”“网址”“官网”“原文”等）或网址是对方自己发来的时候保留；代码块和 QQ 内部标记不受影响。
 
 配置了 Tavily key 且联网查询开启时，主模型还可以用 `qq_search.images` 搜图：`search` 返回本轮有效的候选 selector 与服务商描述，`download` 通过安全下载策略（同一套私网拦截与代理 Fake-IP 规则、带来源 Referer、最长 20 秒、最大 10 MiB）把选中的图片存进本轮任务 output 目录，校验 PNG/JPEG/GIF/WebP 真实签名后把图片作为视觉输入返回（过大时附压缩预览）。主模型确认内容合适后，把返回的路径放进结构化 attachments 就能发到 QQ；只有本轮搜索结果里的链接可以下载，工具固定在原始会话。
 

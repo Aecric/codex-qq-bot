@@ -104,6 +104,21 @@
               </div>
             </div>
 
+            <section id="napcatLogin" class="card napcat-login" hidden>
+              <div class="napcat-login-copy">
+                <h2 id="napcatLoginTitle"></h2>
+                <p id="napcatLoginBody"></p>
+                <p id="napcatLoginError" class="napcat-login-error" hidden></p>
+                <p id="napcatLoginWarning" class="muted small-text" data-i18n="napcatLoginWarning" hidden>谁扫码，机器人就会登录成谁的 QQ，请用机器人账号扫。</p>
+                <button id="napcatQrRefresh" class="button small ghost" type="button" data-i18n="napcatQrRefresh" hidden>刷新二维码</button>
+                <button id="napcatRestart" class="button small" type="button" data-i18n="napcatRestart" hidden>重启 NapCat</button>
+              </div>
+              <div id="napcatQrFrame" class="napcat-qr-frame" hidden>
+                <img id="napcatQrImage" alt="" aria-label="QQ 登录二维码" data-i18n-aria-label="napcatQrAlt" hidden>
+                <span id="napcatQrPending" class="muted small-text" data-i18n="napcatQrPending">正在获取二维码…</span>
+              </div>
+            </section>
+
             <div id="overviewStats" class="stat-row" aria-label="运行摘要" data-i18n-aria-label="runtimeSummary"></div>
 
             <div class="grid overview-main">

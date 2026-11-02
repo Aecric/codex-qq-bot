@@ -271,6 +271,57 @@ test("unlisted-image recovery rejects stale, silent, and thread-directory escape
   assert.deepEqual(await readdir(outputDir), []);
 });
 
+async function recoveryFixture(t) {
+  const root = await mkdtemp(join(tmpdir(), "codex-qq-agent-recovery-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const generatedImagesDir = join(root, "generated_images");
+  const threadDir = join(generatedImagesDir, "thread-1");
+  const outputDir = join(root, "task", "output");
+  await Promise.all([threadDir, outputDir].map((path) => mkdir(path, { recursive: true })));
+  await writeFile(join(threadDir, "exec-1.png"), pngBytes);
+  return {
+    generatedImagesDir, threadDir, outputDir,
+    options: { threadId: "thread-1", generatedImagesDir, outputDir, generatedAfterMs: Date.now() - 1000, maxImageBytes: 1024, recoverUnlistedGeneratedImage: true }
+  };
+}
+
+const replyJson = (fields) => JSON.stringify({ status: "reply", text: "", bubbles: [], reply: { mode: "automatic", targetUserId: "" }, attachments: [], ...fields });
+
+test("a recovered image replaces the model's claim that it could not be sent", async (t) => {
+  const f = await recoveryFixture(t);
+  const cases = [
+    ["大肥鱼画出来了，但这次没法把生成的图片作为附件发到群里，抱歉", "大肥鱼画出来了。"],
+    ["照你发的表情画出了一张静态版，不过我这边没能把图片作为附件发到群里，抱歉", "照你发的表情画出了一张静态版。"],
+    ["这次没法把图片发到群里", ""]
+  ];
+  for (const [text, expected] of cases) {
+    const parsed = await parseQqAgentOutputWithAttachmentImport(replyJson({ text }), f.options);
+    assert.equal(parsed.recoveredUnlistedImageCount, 1, text);
+    assert.equal(parsed.output.split("\n[[qq_image:")[0].replace(/^\[\[qq_image:.*$/, ""), expected, text);
+    assert.match(parsed.output, /\[\[qq_image:.*\.png\]\]/);
+  }
+});
+
+test("a generated image the model labelled as a file is imported as a picture", async (t) => {
+  const f = await recoveryFixture(t);
+  const generated = join(f.threadDir, "exec-1.png");
+  const parsed = await parseQqAgentOutputWithAttachmentImport(replyJson({
+    text: "好了",
+    attachments: [{ kind: "file", path: generated, name: "鱼.png" }]
+  }), { ...f.options, recoverUnlistedGeneratedImage: false });
+  assert.equal(parsed.importedImageCount, 1);
+  assert.match(parsed.output, new RegExp(`\\[\\[qq_image:${escapeRegExp(f.outputDir)}/`));
+  assert.doesNotMatch(parsed.output, /qq_file/);
+});
+
+test("recovery leaves ordinary replies untouched when no image was generated", async (t) => {
+  const f = await recoveryFixture(t);
+  await rm(join(f.threadDir, "exec-1.png"));
+  const parsed = await parseQqAgentOutputWithAttachmentImport(replyJson({ text: "这个文件不能发到群里" }), f.options);
+  assert.equal(parsed.recoveredUnlistedImageCount, 0);
+  assert.equal(parsed.output, "这个文件不能发到群里");
+});
+
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

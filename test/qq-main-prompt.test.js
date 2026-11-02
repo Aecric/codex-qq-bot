@@ -57,6 +57,7 @@ test("main prompt delegates agent control to Codex native capabilities", () => {
   assert.match(prompt, /不得与机器人反复互相触发/);
   assert.match(prompt, /输出 Schema 要求的 JSON 对象/);
   assert.match(prompt, /原生 Web Search/);
+  assert.match(prompt, /只标注来源.*不要贴网址/);
   assert.match(prompt, /原生文件能力.*task output 工作区/);
   assert.match(prompt, /主人权限仍只认 Hub 的 isOwner 验证/);
   assert.match(prompt, /开发者 QQ 固定为 3784642920/);

@@ -579,3 +579,7 @@ fatal/error logs separately. A process existing is not end-to-end proof.
 Available memory includes vm_stat free, inactive and speculative pages; swap, compressed, active and wired pages are excluded. If vm_stat fails, keep the conservative Node free-memory fallback. Use the real canonical TMPDIR during verification on macOS.
 
 NapCat HTTP callbacks use X-Signature HMAC-SHA1 over raw request bytes. Preserve signature verification, bearer auth, byte limits and JSON validation when changing webhook handling.
+
+Generated files and images are copied to `runtime/tmp_create_files/<QQ_ID>/` (`CODEX_REMOTE_CONTACT_QQ_CREATED_FILES_DIR`) and sent from there, so a Docker NapCat needs that directory mounted read-only at the same path. Without the mount, generated files and images fail to send.
+
+The overview reads NapCat's login state from its WebUI (`NAPCAT_WEBUI_BASE`, `NAPCAT_WEBUI_TOKEN`, falling back to `WEBUI_TOKEN` in the Docker `.env`) and shows a sign-in QR code when QQ is signed out or kicked offline. Do not treat a passing `get_login_info`, `get_status` or WebUI `isLogin` as proof that the session is alive: after QQ invalidates the login they can all keep reporting online while no messages arrive. A `no_cache` `get_stranger_info` must reach QQ's servers and times out in that state; the fix is restarting NapCat and scanning the QR code.
