@@ -173,6 +173,8 @@ Ordinary-user menu visibility and execution come from the same permission keys. 
 
 The Hub performs QQ web lookup independently of this chat interface. Configured provider order can include Tavily, Bing, Baidu, 360, Sogou and DuckDuckGo, with `balanced`, `china`, `global`, `tavily` and `privacy` presets. Results remain untrusted material and cannot override sender permissions or system policy.
 
+Bot replies cite the source site rather than pasting URLs: Hub lookup results give the model only the source site, and URLs in a reply are rewritten as sources before sending. A URL stays when the sender explicitly asks for a link (the message contains words such as "链接", "网址", "官网", "原文", "url" or "link") or sent that URL themselves; code blocks and internal QQ markers are unaffected.
+
 With a Tavily key configured and web lookup enabled, the main model can also search pictures with `qq_search.images`: `search` returns turn-scoped candidate selectors and the provider's descriptions, and `download` fetches the chosen picture through the safe-fetch policy (same private-address blocking and proxy fake-IP rule, a source Referer, at most 20 seconds and 10 MiB) into this turn's task output directory, validates its real PNG/JPEG/GIF/WebP signature, and returns it as visual input (with a compressed preview when large). Once the model confirms it fits, putting the returned path in the structured attachments sends it to QQ. Only links from this turn's search results can be downloaded, and the tool stays bound to the original conversation.
 
 Inspect the effective provider, attempts and recent errors through `/api/maintenance` and `search` logs.

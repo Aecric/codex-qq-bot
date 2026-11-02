@@ -10,6 +10,7 @@ import {
   normalizeImagePaths,
   notifyObserver
 } from "../agent/agent-turn-process.js";
+import { formatQqSearchResultSource } from "../../qq-reply-links.js";
 import { flattenQqDynamicTools } from "../agent/qq-mcp-tools.js";
 
 // Adapter for engines reached over an OpenAI-compatible Chat Completions API
@@ -631,7 +632,7 @@ function buildBuiltinTools({ fileRoots, cwd, webSearch, vision, maxImageBytes })
     });
   }
   if (webSearch) {
-    add("web_search", "Search the web and return titles, snippets and links.", {
+    add("web_search", "Search the web and return titles, snippets and source sites.", {
       query: { type: "string", description: "Search keywords." }
     }, async ({ query }) => {
       const results = await webSearch(String(query || ""));
@@ -639,7 +640,7 @@ function buildBuiltinTools({ fileRoots, cwd, webSearch, vision, maxImageBytes })
       return results.slice(0, 6).map((entry, index) => [
         `${index + 1}. ${entry.title}`,
         entry.snippet ? `摘要：${entry.snippet}` : null,
-        entry.url ? `链接：${entry.url}` : null
+        formatQqSearchResultSource(entry)
       ].filter(Boolean).join("\n")).join("\n");
     });
   }

@@ -69,6 +69,7 @@ import { resolveAllowedQqMarkerPath, resolveQqMarkerPath } from "./qq-output-pol
 import { resolveQqReplyFileAttachments } from "./qq-reply-files.js";
 import { parseQqAgentOutputWithAttachmentImport } from "./infrastructure/codex/qq-agent-attachments.js";
 import { scrubQqReplyBubbles } from "./qq-reply-scrub.js";
+import { formatQqSearchResultSource, rewriteQqReplyLinksAsSources } from "./qq-reply-links.js";
 import { createCodexInterestFetch } from "./infrastructure/codex/codex-interest-fetch.js";
 import { createQqEngagedWindows } from "./qq-engaged-window.js";
 import { createQqTaskPleadingTracker, formatQqTaskPleadingContext, formatQqTaskRecord } from "./qq-task-pleading.js";
@@ -8967,7 +8968,7 @@ async function executeQqBotWebSearchCommand(command, event = null) {
         ...results.slice(0, 6).map((result, index) => [
           `${index + 1}. ${result.title}`,
           result.snippet ? `摘要：${result.snippet}` : null,
-          result.url ? `链接：${result.url}` : null
+          formatQqSearchResultSource(result)
         ].filter(Boolean).join("\n"))
       ].join("\n")
     };
@@ -10371,7 +10372,7 @@ async function buildModelReply(event, { replyScope = null } = {}) {
     event.qqAgentStructuredOutput = parsed.structured;
     // The last completed attempt (after any fusion) is the turn's inner state.
     event.qqAgentInnerState = extractQqAgentInnerState(parsed.value);
-    return parsed.output;
+    return rewriteQqEventReplyLinks(parsed.output, event);
   };
   const buildReplyPrompt = async (
     memoryBlock,
@@ -11040,7 +11041,7 @@ async function buildQqOwnerFileImageReply(event, { replyScope = null } = {}) {
     });
     logQqGeneratedAttachmentImport(parsed, event, result);
     event.qqAgentStructuredOutput = parsed.structured;
-    const normalized = await normalizeQqImageGenerationReply(parsed.output, {
+    const normalized = await normalizeQqImageGenerationReply(rewriteQqEventReplyLinks(parsed.output, event), {
       event,
       isImageGeneration,
       taskStartedAt,
@@ -11052,6 +11053,13 @@ async function buildQqOwnerFileImageReply(event, { replyScope = null } = {}) {
     event.imagePaths = imagePaths;
   }
 }
+function rewriteQqEventReplyLinks(reply, event) {
+  return rewriteQqReplyLinksAsSources(reply, {
+    requestText: event.text,
+    allowedUrls: extractQqUrls(analyzeQqConversationIntent(event).links, event.replyContext?.text)
+  });
+}
+
 async function normalizeQqImageGenerationReply(reply, { event, isImageGeneration, taskStartedAt, outputDir } = {}) {
   const text = String(reply || "").trim();
   if (!isImageGeneration) return text;
@@ -11450,7 +11458,7 @@ async function buildWebLookupContext(event) {
       ...results.map((result, index) => [
         `${index + 1}. ${result.title}`,
         result.snippet ? `摘要：${result.snippet}` : null,
-        result.url ? `链接：${result.url}` : null
+        formatQqSearchResultSource(result)
       ].filter(Boolean).join("\n"))
     ].join("\n");
   } catch (error) {

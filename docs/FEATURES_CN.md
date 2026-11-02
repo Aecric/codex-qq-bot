@@ -184,6 +184,8 @@ Codex 时限按任务类型选择，而不是所有工作共用一个常量。`l
 
 Hub 自带 QQ 联网查询，不依赖当前聊天界面的浏览工具。支持按配置顺序尝试 Tavily、Bing、百度、360、搜狗和 DuckDuckGo；预设包括 `balanced`、`china`、`global`、`tavily` 和 `privacy`。查询结果作为非可信资料进入 Agent，不能覆盖原始用户权限或系统规则。
 
+Bot 的回复只标注来源网站，不贴网址：Hub 的查询结果只给模型来源站点，发送前还会把回复里的网址改写成来源。对方明确要链接（消息含“链接”“网址”“官网”“原文”等）或网址是对方自己发来的时候保留；代码块和 QQ 内部标记不受影响。
+
 配置了 Tavily key 且联网查询开启时，主模型还可以用 `qq_search.images` 搜图：`search` 返回本轮有效的候选 selector 与服务商描述，`download` 通过安全下载策略（同一套私网拦截与代理 Fake-IP 规则、带来源 Referer、最长 20 秒、最大 10 MiB）把选中的图片存进本轮任务 output 目录，校验 PNG/JPEG/GIF/WebP 真实签名后把图片作为视觉输入返回（过大时附压缩预览）。主模型确认内容合适后，把返回的路径放进结构化 attachments 就能发到 QQ；只有本轮搜索结果里的链接可以下载，工具固定在原始会话。
 
 实际 provider、尝试记录和最近错误通过 `/api/maintenance` 与 `search` 日志查看。
