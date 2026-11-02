@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { access, copyFile, mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { networkInterfaces } from "node:os";
-import { basename, extname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { brotliDecompress } from "node:zlib";
 import { promisify } from "node:util";
@@ -67,6 +67,14 @@ import {
 } from "./qq-file-image-task-intent.js";
 import { resolveAllowedQqMarkerPath, resolveQqMarkerPath } from "./qq-output-policy.js";
 import { resolveQqReplyFileAttachments } from "./qq-reply-files.js";
+import {
+  buildNapCatLoginResponse,
+  createNapCatLoginClient,
+  createQqSessionProbe,
+  readEnvFileValue,
+  readSessionProbeResponse,
+  restartNapCatDockerContainer
+} from "./napcat-login.js";
 import { parseQqAgentOutputWithAttachmentImport } from "./infrastructure/codex/qq-agent-attachments.js";
 import { scrubQqReplyBubbles } from "./qq-reply-scrub.js";
 import { formatQqSearchResultSource, rewriteQqReplyLinksAsSources } from "./qq-reply-links.js";
@@ -444,7 +452,7 @@ import {
 } from "./unified-memory/qq-person-memory.js";
 import { createWebSearch, formatWebSearchProviderName } from "./web-search.js";
 import { isSupportedImageContentType, readResponseJson, writeResponseBodyToFile } from "./bounded-stream.js";
-import { runJsonProcess } from "./process-runner.js";
+import { runJsonProcess, runProcess } from "./process-runner.js";
 import { createDashboardAssetHandler } from "./dashboard-assets.js";
 import { createAssistantProfileStore, fitAssistantProfile } from "./dashboard-character-card.js";
 import {
@@ -514,6 +522,7 @@ const {
   qqStickerDir,
   qqOutputImagesDir,
   qqTaskWorkspacesDir,
+  napCatDockerEnvPath,
   dataDir,
   codexSessionsDir,
   codexArchivedSessionsDir,
@@ -552,6 +561,8 @@ const {
   logConsoleLevels,
   safeFetchMode,
   oneBotApiBase,
+  napCatWebUiBase,
+  napCatWebUiToken,
   oneBotAccessToken,
   environmentManagementApiToken,
   oneBotRequestTimeoutMs,
@@ -3566,6 +3577,7 @@ async function buildMaintenanceStatus({ force = false } = {}) {
     activeAgent.reportsQuota ? getCachedCodexQuotaSnapshot({ force }) : state.maintenance.codex.quota,
     checkOneBotHealth({ force })
   ]);
+  const { qrImage: _qrImage, ...napcat } = await buildNapCatLoginStatus(await napCatLogin.readLogin());
   const webLookupProviderPlan = buildWebSearchProviderPlan();
   const timeoutPolicies = getCodexTaskTimeoutPolicyMap(codexTaskTimeouts, state.ai.reasoningEffort);
   const { path: _privateCodexPath, ...codexMaintenance } = state.maintenance.codex;
@@ -3574,6 +3586,7 @@ async function buildMaintenanceStatus({ force = false } = {}) {
   return {
     startedAt: state.maintenance.startedAt,
     oneBot: { ...state.maintenance.oneBot },
+    napcat,
     webLookup: {
       ...state.maintenance.webLookup,
       providerPreset: qqWebSearchPreset,
@@ -4129,6 +4142,41 @@ function normalizeRateLimitWindow(window) {
     resetsAt,
     windowMinutes
   };
+}
+
+const napCatLogin = createNapCatLoginClient({
+  baseUrl: napCatWebUiBase,
+  loadToken: () => napCatWebUiToken || readEnvFileValue(napCatDockerEnvPath, "WEBUI_TOKEN")
+});
+let lastNapCatLoginState = null;
+const qqSessionProbe = createQqSessionProbe({
+  probe: async () => {
+    const selfId = state.maintenance.oneBot.selfId;
+    if (!selfId) return null;
+    try {
+      const response = await oneBotFetch("get_stranger_info", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ user_id: Number(selfId), no_cache: true })
+      });
+      return readSessionProbeResponse(response, await readResponseJson(response).catch(() => ({})));
+    } catch (error) {
+      // A timeout is what a dead session looks like; anything else is OneBot being down.
+      return error?.name === "TimeoutError" || error?.name === "AbortError" ? false : null;
+    }
+  }
+});
+
+async function buildNapCatLoginStatus(login) {
+  if (login.isLogin && !state.maintenance.oneBot.ok) await checkOneBotHealth({ force: true });
+  if (login.isLogin && state.maintenance.oneBot.ok) void qqSessionProbe.check();
+  else qqSessionProbe.reset();
+  const response = buildNapCatLoginResponse(login, state.maintenance.oneBot, { sessionLost: qqSessionProbe.isLost() });
+  if (lastNapCatLoginState !== null && lastNapCatLoginState !== response.state) {
+    logger.warn("NapCat login state changed", { from: lastNapCatLoginState, to: response.state }, "onebot");
+  }
+  lastNapCatLoginState = response.state;
+  return response;
 }
 
 let oneBotHealthCheckPromise = null;
@@ -14810,6 +14858,30 @@ async function handleApi(req, res) {
     return sendJson(res, 200, await buildMaintenanceStatus({
       force: requestUrl.searchParams.get("force") === "1"
     }));
+  }
+
+  if (req.method === "GET" && req.url === "/api/napcat/login") {
+    return sendJson(res, 200, await buildNapCatLoginStatus(await napCatLogin.readLogin()));
+  }
+
+  if (req.method === "POST" && req.url === "/api/napcat/restart") {
+    if (!trustedLoopbackRequest) {
+      return sendJson(res, 403, { error: "NapCat can only be restarted from this computer" });
+    }
+    const status = await buildNapCatLoginStatus(await napCatLogin.readLogin());
+    if (status.state !== "session_lost") return sendJson(res, 409, { error: "NapCat is not in a state that needs a restart" });
+    const restart = await restartNapCatDockerContainer({ composeDir: dirname(napCatDockerEnvPath), run: runProcess });
+    if (!restart.ok) {
+      logger.warn("NapCat restart failed", { error: restart.error }, "onebot");
+      return sendJson(res, 502, { error: "重启 NapCat 失败，请手动重启容器。" });
+    }
+    qqSessionProbe.reset();
+    logger.info("NapCat restarted from the dashboard", {}, "onebot");
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (req.method === "POST" && req.url === "/api/napcat/login/qrcode") {
+    return sendJson(res, 200, await buildNapCatLoginStatus(await napCatLogin.refreshQrcode()));
   }
 
   if (req.method === "GET" && requestUrl.pathname === "/api/logs") {

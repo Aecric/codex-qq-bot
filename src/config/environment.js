@@ -82,6 +82,8 @@ export function createEnvironmentConfig(env = process.env) {
     safeFetchMode: normalizeSafeFetchMode(env.CODEX_REMOTE_CONTACT_SAFE_FETCH_MODE),
 
     oneBotApiBase: env.ONEBOT_API_BASE || "http://127.0.0.1:3000",
+    napCatWebUiBase: env.NAPCAT_WEBUI_BASE || "http://127.0.0.1:6099",
+    napCatWebUiToken: String(env.NAPCAT_WEBUI_TOKEN || "").trim(),
     oneBotAccessToken: String(env.ONEBOT_ACCESS_TOKEN || env.CODEX_REMOTE_CONTACT_ONEBOT_TOKEN || "").trim(),
     environmentManagementApiToken: String(env.CODEX_REMOTE_CONTACT_API_TOKEN || "").trim(),
     oneBotRequestTimeoutMs: boundedInteger(env.CODEX_REMOTE_CONTACT_ONEBOT_TIMEOUT_MS, {
