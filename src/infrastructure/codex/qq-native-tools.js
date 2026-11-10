@@ -200,8 +200,12 @@ export function buildQqNativeToolSpecs({
         webRead
       )] : []), ...(canAskGemini ? [fn(
         "ask_gemini",
-        "Ask Google Gemini (a rival model the persona may call a colleague) to decode a chat riddle, pun, homophone, meme or in-joke you cannot understand. Put the puzzling message plus the few surrounding lines that give it meaning into question. Treat the answer as a second opinion, then reply in your own words; do not use it for facts, tasks or anything private.",
-        objectSchema({ question: string("The puzzling message and its short surrounding context, in Chinese.") }),
+        "Ask Google Gemini (a rival model the persona may call a colleague, nicknamed 哈基米) to decode a chat riddle, pun, homophone, meme or in-joke you cannot understand, or to look at chat pictures. Use it when you are stuck, or when someone says 问问哈基米, 找哈基米看看, 问问Gemini or similar. Put the puzzling message plus the few surrounding lines that give it meaning into question. To send pictures, pass their exact selectors from the image directory in image_selectors; Gemini only sees the pictures listed there, and the pictures leave this machine, so never send private ones such as IDs or chat screenshots unless the sender clearly asked. To send people's QQ avatars, pass QQ numbers from the qq_memory.avatar list in avatar_user_ids, only when someone asked for it. At most 4 pictures and avatars together. Gemini's opinion does not count as you having seen an avatar: inspect it with qq_memory.avatar yourself before recording features. Treat the answer as a second opinion, then reply in your own words; do not use it for facts, tasks or anything private.",
+        objectSchema({
+          question: string("The puzzling message and its short surrounding context, or what to find out about the pictures, in Chinese."),
+          image_selectors: { type: "array", items: { type: "string" }, maxItems: 4, description: "Optional. Up to 4 exact image selectors from the current image directory, such as image-3f2a9c." },
+          avatar_user_ids: { type: "array", items: { type: "string" }, maxItems: 4, description: "Optional. QQ numbers whose current QQ avatars to send, from the qq_memory.avatar candidates." }
+        }, ["question"]),
         webRead
       )] : [])]
     },
@@ -358,8 +362,11 @@ export function createQqNativeToolDispatcher({
     const boundEvent = hostCommandTool || visualTool || originalConversationTool ? event : focusedEvent || event;
     const sessionTool = call.namespace === "qq_session" && call.tool === "manage";
     const inboundFileTool = call.namespace === "qq_context" && call.tool === "download_file";
+    const geminiImageTool = call.namespace === "qq_search" && call.tool === "ask_gemini"
+      && [call.arguments?.image_selectors, call.arguments?.avatar_user_ids].some((list) => Array.isArray(list) && list.length > 0);
     const structured = sessionTool
       || inboundFileTool
+      || geminiImageTool
       || visualTool
       || originalConversationTool
       || hostCommandTool

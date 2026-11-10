@@ -6,7 +6,8 @@ import {
   formatQqImageMemoryCandidates,
   collectQqContextImages,
   getQqGroupRecentContextLimit,
-  snapshotQqContextImages
+  snapshotQqContextImages,
+  formatQqGeminiImageHint
 } from "../src/qq-enhancer/context-images.js";
 
 const memoryNow = Date.parse("2026-10-05T12:00:00Z");
@@ -158,4 +159,23 @@ test("explicit bot triggers use a larger complete recent-group window", () => {
   assert.equal(getQqGroupRecentContextLimit(), 20);
   assert.equal(getQqGroupRecentContextLimit({ explicitBotTrigger: true }), 30);
   assert.equal(getQqGroupRecentContextLimit({ explicitBotTrigger: true, expandLevel: 1 }), 48);
+});
+
+test("restates Gemini image support only when the sender names Gemini and images exist", () => {
+  const candidates = [
+    { selector: "image-old", origin: "前文消息" },
+    { selector: "image-quoted", origin: "引用消息" }
+  ];
+  for (const text of ["继续问问哈基米这个是谁", "问问Gemini", "找 GEMINI 看看"]) {
+    const hint = formatQqGeminiImageHint(text, candidates);
+    assert.match(hint, /image_selectors=\["image-quoted"\]/);
+    assert.doesNotMatch(hint, /image-old/);
+  }
+  assert.match(formatQqGeminiImageHint("问问哈基米", [candidates[0]]), /\["image-old"\]/);
+  assert.equal(formatQqGeminiImageHint("这是谁", candidates), "");
+  assert.equal(formatQqGeminiImageHint("问问哈基米", []), "");
+  const avatarHint = formatQqGeminiImageHint("传输头像给Gemini 然后更新角色卡", []);
+  assert.match(avatarHint, /avatar_user_ids/);
+  assert.match(avatarHint, /inspect 亲自看过/);
+  assert.doesNotMatch(formatQqGeminiImageHint("问问哈基米", candidates), /用 qq_memory.avatar/);
 });

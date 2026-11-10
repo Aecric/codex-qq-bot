@@ -307,7 +307,7 @@ Hub 和 OneBot 两端 token 应一致。未配置 token 时，Webhook 仅信任 
 | `DEEPSEEK_API_KEY` | 空 | DeepSeek 兴趣模型 key |
 | `DEEPSEEK_BASE_URL` | DeepSeek 官方 API | DeepSeek 端点 |
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434/v1` | `ollama` 兴趣厂商使用的 Ollama OpenAI 兼容端点 |
-| `GEMINI_API_KEY` | 空 | 设置后 Bot 多一个 qq_search.ask_gemini 工具，看不懂的梗、谜语和双关可以请 Gemini 解读；密钥只从环境读取 |
+| `GEMINI_API_KEY` | 空 | 设置后 Bot 多一个 qq_search.ask_gemini 工具，看不懂的梗、谜语和双关可以请 Gemini 解读，也能把聊天里的图片或当前会话成员的 QQ 头像发给它看（说“问问哈基米”“问问Gemini”即可触发，每次共最多 4 张，内容会发送到 Google）；密钥只从环境读取 |
 | `CODEX_REMOTE_CONTACT_GEMINI_MODEL` | `gemini-3.8-flash` | ask_gemini 使用的 Gemini 模型 |
 
 仪表盘“智能行为”页或 QQ 主人命令 `/兴趣厂商 openrouter|deepseek|custom|codex|ollama` 可切换厂商，`/兴趣模型 模型ID` 可覆盖默认模型。密钥始终只从环境读取，不写入 `data/settings.json`。OpenRouter 使用严格 JSON Schema；DeepSeek 和自定义兼容服务使用 JSON Object 模式。`codex` 不需要 key：每次判断都是本机 Codex 登录上的一轮无工具、低思考强度任务（默认模型 `gpt-6-luna`），与回复共用 Codex 队列。`ollama` 同样不需要 key：调用本机 Ollama（默认模型 `gemma4:e4b-it-qat`，4-bit 量化，运行时约 4GB；16GB 内存的机器上非量化版约 10GB，会把 NapCat 挤进 swap），关闭思考（只有附带图片时用 `low` 短暂思考，否则小模型容易误读图片来源）并发送 `keep_alive: -1` 让模型常驻，单次判断只需几秒；使用前先 `ollama pull gemma4:e4b-it-qat`。可运行 `npm run ncc -- search-config` 初始化仓库环境文件。排障先看 `/api/maintenance` 和 `search` / `interest` 日志。

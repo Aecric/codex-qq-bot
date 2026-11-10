@@ -70,6 +70,24 @@ export function formatQqImageMemoryCandidates(candidates = [], { offset = 0 } = 
   ].filter(Boolean).join("\n");
 }
 
+// Long-lived agent threads keep what the Bot read and said before a tool gained
+// image support, so an explicit request restates the capability on every turn.
+export function formatQqGeminiImageHint(text, candidates = []) {
+  const value = String(text || "");
+  if (!/哈基米|gemini/i.test(value)) return "";
+  const parts = [];
+  if (candidates.length) {
+    const direct = candidates.filter((item) => item.origin === "当前消息" || item.origin === "引用消息");
+    const selectors = (direct.length ? direct : candidates.slice(0, 1)).slice(0, 4).map((item) => item.selector);
+    parts.push(`如果对方要它看图，调用它并传 image_selectors=${JSON.stringify(selectors)}（也可换成目录里别的图）。`);
+  }
+  if (/头像|角色卡/.test(value)) {
+    parts.push("如果对方要它看群友头像，不用让人发图，用 qq_memory.avatar 的 list 找到 QQ 号后传 avatar_user_ids；要记录头像特征，先用 inspect 亲自看过再 record。");
+  }
+  if (!parts.length) return "";
+  return `【Gemini 可以看图】对方提到了 Gemini（哈基米）。qq_search.ask_gemini 现在支持 image_selectors 和 avatar_user_ids，每次共最多 4 张。${parts.join("")}此前说过的“接口只接文字”“不能传图”“不能传头像”都已经过时，不要再这样说；只有工具真的返回失败才如实说明。`;
+}
+
 export function snapshotQqContextImages(images = [], { limit = defaultImageLimit } = {}) {
   const safeLimit = normalizeLimit(limit);
   const seen = new Set();
