@@ -5,6 +5,11 @@ import {
   listInterestModelProviders,
   normalizeInterestModelProvider
 } from "./interest-model-provider.js";
+import {
+  isValidQqJudgeModelId,
+  normalizeQqJudgeModelsByProvider,
+  resolveQqJudgeModelForProvider
+} from "./qq-interest-model-selection.js";
 
 const BOT_MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/;
 const QQ_GROUP_ID_PATTERN = /^[1-9]\d{4,12}$/;
@@ -65,7 +70,15 @@ export function readDashboardBotSettings(state) {
     judgeMaxRecentMessages: boundedInteger(judge.maxRecentMessages, 1, 12, 8),
     judgeProvider: normalizeInterestModelProvider(judge.provider),
     judgeApiKeyConfigured: Boolean(judge.apiKeyConfigured),
-    judgeProviders: listInterestModelProviders().map(({ id, label, defaultModel }) => ({ id, label, defaultModel })),
+    // One saved model per provider, so a backup provider (for example Ollama
+    // while Codex is active) can be edited before the switch happens.
+    judgeModelsByProvider: normalizeQqJudgeModelsByProvider(judge.modelsByProvider),
+    judgeProviders: listInterestModelProviders().map(({ id, label, defaultModel }) => ({
+      id,
+      label,
+      defaultModel,
+      model: resolveQqJudgeModelForProvider(judge, id)
+    })),
     ...normalizeQqBehaviorSettings(qq.behavior)
   };
 }
@@ -87,6 +100,7 @@ export function applyDashboardBotSettings(state, input) {
   state.qq.proactive.judgeEveryMinutes = next.judgeEveryMinutes;
   state.qq.proactive.judge.provider = next.judgeProvider;
   state.qq.proactive.judge.model = next.judgeModel;
+  state.qq.proactive.judge.modelsByProvider = next.judgeModelsByProvider;
   state.qq.proactive.judge.baseUrl = next.judgeBaseUrl;
   state.qq.proactive.judge.apiKeyConfigured = next.judgeApiKeyConfigured;
   state.qq.proactive.judge.timeoutMs = next.judgeTimeoutMs;
@@ -104,6 +118,7 @@ export function applyDashboardBotSettings(state, input) {
       state.qq.proactive.judgeEveryMinutes = previous.judgeEveryMinutes;
       state.qq.proactive.judge.provider = previous.judgeProvider;
       state.qq.proactive.judge.model = previous.judgeModel;
+      state.qq.proactive.judge.modelsByProvider = previous.judgeModelsByProvider;
       state.qq.proactive.judge.baseUrl = previousJudgeBaseUrl;
       state.qq.proactive.judge.apiKeyConfigured = previous.judgeApiKeyConfigured;
       state.qq.proactive.judge.timeoutMs = previous.judgeTimeoutMs;
@@ -132,6 +147,31 @@ function normalizePatch(input, current) {
   next.judgeTimeoutMs = optionalInteger(input, "judgeTimeoutMs", 1500, 20000, next.judgeTimeoutMs);
   next.judgeMaxRecentMessages = optionalInteger(input, "judgeMaxRecentMessages", 1, 12, next.judgeMaxRecentMessages);
 
+  next.judgeModelsByProvider = { ...normalizeQqJudgeModelsByProvider(current.judgeModelsByProvider) };
+  if (Object.hasOwn(input, "judgeModelsByProvider")) {
+    const patch = input.judgeModelsByProvider;
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+      throw new RangeError("judgeModelsByProvider must be an object of provider to model id");
+    }
+    for (const [rawProvider, rawModel] of Object.entries(patch)) {
+      const provider = String(rawProvider || "").trim().toLowerCase();
+      if (!INTEREST_MODEL_PROVIDER_IDS.includes(provider)) {
+        throw new RangeError(`judgeModelsByProvider has an unknown provider: ${rawProvider}`);
+      }
+      const model = String(rawModel ?? "").trim();
+      // An empty value goes back to the provider default.
+      if (!model || model === getDefaultInterestModel(provider)) delete next.judgeModelsByProvider[provider];
+      else if (isValidQqJudgeModelId(model) && BOT_MODEL_PATTERN.test(model)) next.judgeModelsByProvider[provider] = model;
+      else throw new RangeError(`judgeModelsByProvider.${provider} must be a valid provider model id`);
+    }
+    // Only an entry for the active provider changes the live model; editing a
+    // backup provider's model leaves the running one alone.
+    if (!Object.hasOwn(input, "judgeModel") && !Object.hasOwn(input, "judgeProvider")
+      && Object.keys(patch).some((key) => String(key).trim().toLowerCase() === next.judgeProvider)) {
+      next.judgeModel = resolveQqJudgeModelForProvider({ modelsByProvider: next.judgeModelsByProvider }, next.judgeProvider);
+    }
+  }
+
   if (Object.hasOwn(input, "judgeProvider")) {
     const requested = String(input.judgeProvider || "").trim().toLowerCase();
     if (!INTEREST_MODEL_PROVIDER_IDS.includes(requested)) {
@@ -139,7 +179,7 @@ function normalizePatch(input, current) {
     }
     if (requested !== next.judgeProvider) {
       next.judgeProvider = requested;
-      next.judgeModel = getDefaultInterestModel(requested);
+      next.judgeModel = resolveQqJudgeModelForProvider({ modelsByProvider: next.judgeModelsByProvider }, requested);
       next.judgeBaseUrl = getDefaultInterestModelBaseUrl(requested);
       next.judgeApiKeyConfigured = false;
     }
@@ -151,6 +191,8 @@ function normalizePatch(input, current) {
       throw new RangeError("judgeModel must be a valid provider model id");
     }
     next.judgeModel = model;
+    if (model === getDefaultInterestModel(next.judgeProvider)) delete next.judgeModelsByProvider[next.judgeProvider];
+    else next.judgeModelsByProvider[next.judgeProvider] = model;
   }
 
   for (const [key, { min, max, integer }] of Object.entries(BEHAVIOR_NUMBERS)) {

@@ -88,6 +88,28 @@ import { createQqInterestIdleSwitch } from "./qq-interest-idle-switch.js";
 import { readHostIdleSeconds } from "./infrastructure/host-idle.js";
 import { setOllamaModelResidency } from "./infrastructure/ollama-residency.js";
 import { findQqBilibiliShareTitle, formatQqShareCardRoastContext } from "./qq-share-card-roast.js";
+import {
+  QQ_ADDRESS_SOURCES,
+  buildQqAliasAddressPayload,
+  classifyQqProtocolAddress,
+  createQqAddressingStats,
+  createQqAliasAddressJudgeCache,
+  hasQqProtocolSelfAt,
+  heuristicQqAliasAddressVerdict,
+  judgeQqAliasAddress,
+  resolveQqAddressing,
+  resolveQqAliasRoutingMode,
+  stripQqProtocolMarkers
+} from "./qq-addressing.js";
+import { createQqPendingImageRequests } from "./qq-pending-image-request.js";
+import {
+  buildQqJudgeModelTarget,
+  createQqInterestModelSwitcher,
+  migrateQqJudgeModelSettings,
+  normalizeQqJudgeModelsByProvider,
+  rememberQqJudgeModelForProvider,
+  resolveQqJudgeModelForProvider
+} from "./qq-interest-model-selection.js";
 import { createQqZoneClient } from "./qq-qzone.js";
 import {
   getDefaultInterestModel,
@@ -968,7 +990,7 @@ function syncActiveQqInterestModelConfig({ resetBaseUrl = false, resetModel = fa
   const runtime = resolveInterestModelRuntimeConfig(judge.provider, environmentConfig);
   judge.provider = runtime.provider;
   if (resetBaseUrl || !String(judge.baseUrl || "").trim()) judge.baseUrl = runtime.baseUrl;
-  if (resetModel || !String(judge.model || "").trim()) judge.model = runtime.defaultModel;
+  if (resetModel || !String(judge.model || "").trim()) judge.model = resolveQqJudgeModelForProvider(judge, runtime.provider);
   judge.apiKeyConfigured = runtime.apiKeyConfigured;
   return getActiveQqInterestModelConfig();
 }
@@ -1397,6 +1419,15 @@ async function loadSettings() {
           && new Set(["nousresearch/hermes-3-llama-3.1-405b:free", "tencent/hy3:free"]).has(state.qq.proactive.judge.model)) {
           state.qq.proactive.judge.model = getDefaultInterestModel("openrouter");
         }
+        // Older settings have only the live provider/model pair; that model is
+        // kept as the override of the provider it was saved with.
+        migrateQqJudgeModelSettings(state.qq.proactive.judge, {
+          savedProvider: state.qq.proactive.judge.provider,
+          savedModel: state.qq.proactive.judge.model,
+          savedModelsByProvider: judge.modelsByProvider && typeof judge.modelsByProvider === "object" ? judge.modelsByProvider : undefined,
+          envModelsByProvider: environmentConfig.qqProactiveJudgeModelsByProvider
+        });
+        state.qq.proactive.judge.model = resolveQqJudgeModelForProvider(state.qq.proactive.judge, state.qq.proactive.judge.provider);
       }
       syncActiveQqInterestModelConfig();
     }
@@ -3030,24 +3061,76 @@ async function applyQqQuotaGuard(decision, quota) {
 }
 
 async function applyQqInterestIdleSwitch(provider, { idleSeconds }) {
-  const previous = getActiveQqInterestModelConfig();
-  const next = resolveInterestModelRuntimeConfig(provider, environmentConfig);
-  if (provider === "ollama") {
-    await setOllamaModelResidency({ baseUrl: next.baseUrl, model: next.defaultModel, resident: true });
+  const target = buildQqInterestModelTargetForProvider(provider);
+  const result = await qqInterestModelSwitcher.request(target, { reason: "owner-presence" });
+  if (!result.ok) {
+    if (result.error) throw result.error;
+    return;
   }
-  state.qq.proactive.judge.provider = provider;
-  const active = syncActiveQqInterestModelConfig({ resetBaseUrl: true, resetModel: true });
-  await saveSettings();
   logger.info("QQ interest judge switched by owner presence", {
-    from: `${previous.provider}/${previous.model}`,
-    to: `${active.provider}/${active.model}`,
+    from: `${result.previous?.provider}/${result.previous?.model}`,
+    to: `${result.active.provider}/${result.active.model}`,
     idleSeconds: idleSeconds == null ? null : Math.round(idleSeconds)
   }, "interest");
-  if (previous.provider === "ollama" && provider !== "ollama") {
-    await setOllamaModelResidency({ baseUrl: previous.baseUrl, model: previous.model, resident: false })
-      .catch((error) => logger.warn("Unable to unload the local interest model", { error }, "interest"));
-  }
 }
+
+// The target a provider change runs on: the provider's saved model override
+// (or its default) and, for a provider change, that provider's base URL.
+function buildQqInterestModelTargetForProvider(provider, { model = null, baseUrl = null } = {}) {
+  const judge = state.qq.proactive.judge;
+  const runtime = resolveInterestModelRuntimeConfig(provider, environmentConfig);
+  const target = buildQqJudgeModelTarget(judge, runtime.provider, {
+    baseUrl: baseUrl || (runtime.provider === judge.provider ? judge.baseUrl : "") || runtime.baseUrl
+  });
+  if (model) target.model = String(model).trim();
+  return target;
+}
+
+function getQqInterestModelRuntimeTarget() {
+  const active = getActiveQqInterestModelConfig();
+  return { provider: active.provider, model: active.model, baseUrl: active.baseUrl };
+}
+
+const qqInterestModelSwitcher = createQqInterestModelSwitcher({
+  preload: (target) => setOllamaModelResidency({ baseUrl: target.baseUrl, model: target.model, resident: true }),
+  unload: (previous) => setOllamaModelResidency({ baseUrl: previous.baseUrl, model: previous.model, resident: false })
+    .catch((error) => logger.warn("Unable to unload the local interest model", { error, model: previous.model }, "interest")),
+  getActive: getQqInterestModelRuntimeTarget,
+  // Requests that already hold the old snapshot finish within the judge's
+  // own deadlines; the old model is unloaded only after that.
+  unloadDelayMs: Math.max(30_000, Number(state.qq.proactive.judge.timeoutMs || 6500) * 3),
+  commit: async (target) => {
+    const judge = state.qq.proactive.judge;
+    judge.provider = target.provider;
+    judge.model = target.model;
+    if (target.baseUrl) judge.baseUrl = target.baseUrl;
+    rememberQqJudgeModelForProvider(judge, target.provider, target.model);
+    syncActiveQqInterestModelConfig();
+    await saveSettings();
+    return getActiveQqInterestModelConfig();
+  },
+  onStatus: ({ phase, target, previous, active, reason, error }) => {
+    qqInterestModelRuntimeStatus = {
+      phase,
+      reason,
+      targetProvider: target?.provider || null,
+      targetModel: target?.model || null,
+      activeProvider: (active || previous)?.provider || null,
+      activeModel: (active || previous)?.model || null,
+      error: error ? String(error.message || error).slice(0, 300) : null,
+      updatedAt: new Date().toISOString()
+    };
+    if (phase === "failed") {
+      logger.warn("QQ interest model change kept the previous model because the target failed to load", {
+        reason,
+        target: `${target?.provider}/${target?.model}`,
+        kept: `${previous?.provider}/${previous?.model}`,
+        error
+      }, "interest");
+    }
+  }
+});
+let qqInterestModelRuntimeStatus = null;
 
 // Long-lived threads are retired when they get old or long: once the chat has
 // been quiet for a while, the scope's chat summary saves what matters into
@@ -3302,6 +3385,13 @@ function buildPublicState() {
         enabled: state.qq.proactive.enabled,
         judgeEveryMessages: state.qq.proactive.judgeEveryMessages,
         judgeEveryMinutes: state.qq.proactive.judgeEveryMinutes,
+        judgeModels: {
+          provider: state.qq.proactive.judge.provider,
+          model: state.qq.proactive.judge.model,
+          modelsByProvider: normalizeQqJudgeModelsByProvider(state.qq.proactive.judge.modelsByProvider),
+          runtime: qqInterestModelRuntimeStatus
+        },
+        addressing: getQqAddressingStatus(),
         coldGroupInterest: {
           enabled: state.qq.proactive.enabled,
           allowedHours: "learned-per-group",
@@ -4506,25 +4596,37 @@ function inferImageExtension(nameHint, contentType) {
   return ".jpg";
 }
 
+// Addressing evidence is kept apart by source (see qq-addressing.js): protocol
+// facts, an alias call the addressing judge confirmed, and, only in legacy or
+// shadow alias routing, the old alias-substring match.
+function getQqAliasRoutingModeForEvent(event) {
+  return resolveQqAliasRoutingMode({
+    mode: environmentConfig.qqAliasRoutingMode,
+    groups: environmentConfig.qqAliasRoutingGroups,
+    groupId: event?.groupId
+  });
+}
+
+function isQqAliasConfirmedEvent(event) {
+  return event?.qqAddressing?.source === QQ_ADDRESS_SOURCES.ALIAS_CONFIRMED;
+}
+
+function isLegacyAliasAddressEvent(event) {
+  if (!event?.groupId || classifyQqProtocolAddress(event)) return false;
+  return getQqAliasRoutingModeForEvent(event) !== "judge" && textMentionsAssistant(event.text ?? "");
+}
+
+// Protocol-only address: private chat, poke, a real @ or a reply to the bot.
+function isProtocolQqMentionEvent(event) {
+  return Boolean(classifyQqProtocolAddress(event));
+}
+
 function isMentionEvent(event) {
-  const text = event.text ?? "";
-  return (
-    event.type === "private_message" ||
-    isQqPokeEvent(event) ||
-    event.type === "group_at" ||
-    event.hasSelfAtSegment ||
-    event.isReplyToSelf ||
-    textMentionsAssistant(text)
-  );
+  return isProtocolQqMentionEvent(event) || isQqAliasConfirmedEvent(event) || isLegacyAliasAddressEvent(event);
 }
 
 function isExplicitQqAtEvent(event) {
-  const text = event.text ?? "";
-  return (
-    event.type === "group_at" ||
-    event.hasSelfAtSegment ||
-    textMentionsAssistant(text)
-  );
+  return hasQqProtocolSelfAt(event) || isQqAliasConfirmedEvent(event) || isLegacyAliasAddressEvent(event);
 }
 
 function isQqPokeEvent(event) {
@@ -4583,25 +4685,30 @@ async function shouldRespondToQq(event) {
   if (isAllowedQqCommandEvent(event)) {
     return { ok: true, reason: "QQ command" };
   }
-  if (hasPendingQqImageRequest(event)) {
-    return { ok: true, reason: "Pending image request matched", proactive: true, inspectImages: true };
+  if (await hasPendingQqImageRequest(event)) {
+    return { ok: true, reason: "Pending image request matched", triggerMode: "pending_image_request", inspectImages: true };
   }
+  maybeShadowJudgeQqAliasCandidate(event);
   if (isMentionEvent(event)) {
     return { ok: true, reason: "Explicit mention or reply to bot" };
   }
+  // A sender who was just told to beg harder gets heard without an @ while
+  // the post-@ watch window is open; the reply turn counts it as the next ask.
+  if (state.qq.enhancer.enabled
+    && qqEngagedWindows.remaining(event.groupId) > 0
+    && qqTaskPleading.pending(getQqTaskPleadingKey(event))) {
+    qqEngagedWindows.consume(event.groupId);
+    event.qqTaskPleaFollowUp = true;
+    return { ok: true, reason: "Follow-up to a pending task plea" };
+  }
+  const aliasDecision = await routeQqAliasCandidate(event);
+  if (aliasDecision) return aliasDecision;
   if (state.qq.enhancer.enabled) {
-    // A sender who was just told to beg harder gets heard without an @ while
-    // the post-@ watch window is open; the reply turn counts it as the next ask.
-    if (qqEngagedWindows.remaining(event.groupId) > 0 && qqTaskPleading.pending(getQqTaskPleadingKey(event))) {
-      qqEngagedWindows.consume(event.groupId);
-      event.qqTaskPleaFollowUp = true;
-      return { ok: true, reason: "Follow-up to a pending task plea" };
-    }
-    const shareCardRoastTitle = takeQqShareCardRoast(event);
-    if (shareCardRoastTitle) {
-      event.qqShareCardRoastTitle = shareCardRoastTitle;
-      return { ok: true, reason: "Bilibili share card title roast", proactive: true };
-    }
+    // A Bilibili share card is an interest signal for the ordinary judge; the
+    // roast still needs that judge's approval and the cooldown starts only
+    // when a roast is actually delivered.
+    const shareCardRoastTitle = peekQqShareCardRoast(event);
+    if (shareCardRoastTitle) event.qqShareCardRoastTitle = shareCardRoastTitle;
     // An open engaged window judges every message itself, so the narrower
     // same-sender follow-up batch must not swallow messages first.
     const engaged = qqEngagedWindows.consume(event.groupId);
@@ -4612,11 +4719,130 @@ async function shouldRespondToQq(event) {
     rememberLatestQqProactiveEvent(event);
     const proactiveDecision = await judgeQqProactiveEvent(event, { engaged });
     if (proactiveDecision.ok) return proactiveDecision;
+    delete event.qqShareCardRoastTitle;
   }
   if (state.qq.groupMode === "mention-only" && !isMentionEvent(event)) {
     return { ok: false, reason: "Mention-only mode ignored this message" };
   }
   return { ok: true };
+}
+
+const QQ_PENDING_IMAGE_REQUEST_WAIT_MS = 20_000;
+const qqPendingImageRequests = createQqPendingImageRequests();
+const qqAliasAddressJudgeCache = createQqAliasAddressJudgeCache();
+const qqAddressingStats = createQqAddressingStats();
+
+// One addressing judgment per group message. Without a usable interest model
+// a deterministic vocative check stands in, so aliases keep working.
+async function runQqAliasAddressJudgment(event, { mode }) {
+  const aliasHits = resolveQqAddressing(event, { aliases: assistantMentionAliases }).aliasHits;
+  const model = getActiveQqInterestModelConfig();
+  const useModel = Boolean(state.qq.proactive.judge.enabled && model.apiKeyConfigured);
+  let verdict;
+  if (useModel) {
+    const scopeId = getQqMemoryScopeId(event);
+    const result = await judgeQqAliasAddress({
+      runTask: runQqInterestModelStructuredTask,
+      model,
+      timeoutMs: environmentConfig.qqAliasJudgeTimeoutMs,
+      payload: buildQqAliasAddressPayload({
+        event,
+        aliases: assistantMentionAliases,
+        assistantName,
+        recentMessages: state.qq.memory.recentMessages[scopeId] || [],
+        maxRecentMessages: 8
+      })
+    });
+    verdict = result.ok
+      ? { ...result, outcome: "judged" }
+      : { ...result, target: "unclear", reasonCode: "insufficient_context", outcome: result.timedOut ? "timeout" : "error" };
+  } else {
+    verdict = { ok: true, ...heuristicQqAliasAddressVerdict(event.text, assistantMentionAliases), outcome: "heuristic", fallback: true, durationMs: 0 };
+  }
+  qqAddressingStats.record({
+    mode,
+    outcome: verdict.outcome,
+    target: verdict.target,
+    reasonCode: verdict.reasonCode,
+    durationMs: verdict.durationMs,
+    timedOut: verdict.timedOut,
+    invalidOutput: verdict.invalidOutput,
+    fallback: verdict.fallback
+  });
+  // Reason codes and timings only: no message text or raw model output.
+  logger.info("QQ alias address judged", {
+    operation: "addressing.alias_judge",
+    mode,
+    outcome: verdict.outcome,
+    target: verdict.target,
+    reasonCode: verdict.reasonCode,
+    provider: verdict.provider || (useModel ? model.provider : null),
+    model: verdict.model || (useModel ? model.model : null),
+    promptVersion: verdict.promptVersion || null,
+    durationMs: verdict.durationMs ?? null,
+    attemptCount: verdict.attemptCount ?? null,
+    formatRetryCount: verdict.formatRetryCount ?? null,
+    error: verdict.ok === false ? verdict.reason : undefined,
+    aliasHitCount: aliasHits.length,
+    groupId: event.groupId || null,
+    messageId: event.raw?.message_id == null ? null : String(event.raw.message_id)
+  }, "interest", qqLogContext(event));
+  return verdict;
+}
+
+function getQqAliasAddressVerdict(event, { mode }) {
+  const key = qqAliasAddressJudgeCache.key(event);
+  const { promise, duplicate } = qqAliasAddressJudgeCache.run(key, () => runQqAliasAddressJudgment(event, { mode }));
+  return promise.then((verdict) => ({ ...verdict, duplicate }));
+}
+
+function isQqAliasCandidateEvent(event) {
+  return Boolean(event?.groupId)
+    && resolveQqAddressing(event, { aliases: assistantMentionAliases }).source === QQ_ADDRESS_SOURCES.ALIAS_CANDIDATE;
+}
+
+// Shadow mode keeps the legacy route and only records what the addressing
+// judge would have decided; it never sends anything.
+function maybeShadowJudgeQqAliasCandidate(event) {
+  if (!isQqAliasCandidateEvent(event) || getQqAliasRoutingModeForEvent(event) !== "shadow") return;
+  trackBackgroundTask(getQqAliasAddressVerdict(event, { mode: "shadow" }), () => null);
+}
+
+// Judge mode: a text alias without a protocol address is answered directly
+// only after the addressing judge says it is aimed at the bot. A declined,
+// unclear or failed message stays silent and does not fall through to the
+// ordinary interest judge, so one message is never judged twice.
+async function routeQqAliasCandidate(event) {
+  if (!isQqAliasCandidateEvent(event) || getQqAliasRoutingModeForEvent(event) !== "judge") return null;
+  // An open engaged window counts every watched message; the alias judgment
+  // takes this message's slot instead of a second ordinary judgment.
+  if (state.qq.enhancer.enabled && qqEngagedWindows.remaining(event.groupId) > 0) qqEngagedWindows.consume(event.groupId);
+  const verdict = await getQqAliasAddressVerdict(event, { mode: "judge" });
+  if (verdict.duplicate) {
+    return { ok: false, reason: "Duplicate alias candidate was already routed", triggerMode: "alias_duplicate" };
+  }
+  if (verdict.target === "bot") {
+    event.qqAddressing = {
+      source: QQ_ADDRESS_SOURCES.ALIAS_CONFIRMED,
+      reasonCode: verdict.reasonCode,
+      outcome: verdict.outcome
+    };
+    return { ok: true, reason: "Alias call confirmed by addressing judge", triggerMode: "alias_confirmed" };
+  }
+  return {
+    ok: false,
+    reason: `Alias mention not addressed to bot (${verdict.target}/${verdict.reasonCode})`,
+    triggerMode: "alias_declined"
+  };
+}
+
+function getQqAddressingStatus() {
+  return {
+    aliasRoutingMode: environmentConfig.qqAliasRoutingMode,
+    aliasRoutingGroups: environmentConfig.qqAliasRoutingGroups,
+    aliasJudgeTimeoutMs: environmentConfig.qqAliasJudgeTimeoutMs,
+    stats: qqAddressingStats.snapshot()
+  };
 }
 
 function routeQqConversationFollowUpEvent(event) {
@@ -4749,6 +4975,7 @@ async function judgeQqProactiveEvent(event, { triggerMode = "message", countMess
     engagedConversation: engaged
       ? { watchedMessagesLeft: engaged.remaining, windowSize: engaged.size }
       : null,
+    shareCardTitle: event.qqShareCardRoastTitle || null,
     currentAndQuotedKeywords: interestKeywordMatch.keywords || [],
     recentContextKeywords: recentContextKeywordHits,
     relationship: adaptive.relationshipInterest,
@@ -6150,8 +6377,9 @@ function logQqProactiveInterestDecision(event, decision = {}) {
     labels: interest.labels || [],
     blockers: interest.blockers || [],
     judgeEnabled: Boolean(state.qq.proactive.judge.enabled),
-    judgeProvider: state.qq.proactive.judge.provider,
-    judgeModel: state.qq.proactive.judge.model,
+    // The judge ran on the caller's snapshot; live state may have switched.
+    judgeProvider: judge.provider || state.qq.proactive.judge.provider,
+    judgeModel: judge.model || state.qq.proactive.judge.model,
     judgeApiKeyConfigured: getActiveQqInterestModelConfig().apiKeyConfigured,
     modelShouldReply: judge.shouldReply,
     modelInterest: judge.interest,
@@ -6935,7 +7163,7 @@ async function buildQqGroupAdminAction(normalized, event) {
   return { reply: formatQqCommandUsage(getQqCommand("groupAdmin"), { notice: "未识别的群管理动作。" }) };
 }
 
-function buildQqInterestConfigAction(normalized, event) {
+async function buildQqInterestConfigAction(normalized, event) {
   const body = String(normalized || "").trim();
   const compact = body.replace(/\s+/g, "").toLowerCase();
   if (/^(兴趣|主动|兴趣配置|主动配置|兴趣状态|主动状态|interest|proactive)$/i.test(compact)) {
@@ -7004,11 +7232,19 @@ function buildQqInterestConfigAction(normalized, event) {
     if (!provider) {
       return { reply: formatQqWarning("不支持这个兴趣模型厂商。", ["可选：openrouter、deepseek、custom、codex、ollama"]) };
     }
-    state.qq.proactive.judge.provider = provider;
-    const active = syncActiveQqInterestModelConfig({ resetBaseUrl: true, resetModel: true });
+    const switched = await qqInterestModelSwitcher.request(buildQqInterestModelTargetForProvider(provider), { reason: "qq-command" });
+    if (!switched.ok) {
+      return {
+        reply: formatQqWarning(switched.superseded ? "兴趣模型切换被更新的设置取代。" : "目标兴趣模型加载失败，已保留原模型。", [
+          `目标：${provider}/${switched.target?.model || "-"}`,
+          switched.error ? `错误：${String(switched.error.message || switched.error).slice(0, 120)}` : null
+        ].filter(Boolean))
+      };
+    }
+    const active = switched.active;
     return {
       reply: formatQqDone(`兴趣模型厂商已切换：${active.label}`, [
-        `默认模型：${active.model}`,
+        `模型：${active.model}`,
         `Key：${active.apiKeyConfigured ? "已配置" : "未配置"}`
       ]),
       beforeSend: saveSettings
@@ -7022,10 +7258,20 @@ function buildQqInterestConfigAction(normalized, event) {
     if (!isValidInterestModelId(model)) {
       return { reply: formatQqWarning("兴趣判定模型名格式不正确。", [`当前厂商示例：${getDefaultInterestModel(state.qq.proactive.judge.provider)}`]) };
     }
-    state.qq.proactive.judge.model = model;
+    const switched = await qqInterestModelSwitcher.request(
+      buildQqInterestModelTargetForProvider(state.qq.proactive.judge.provider, { model }),
+      { reason: "qq-command" }
+    );
+    if (!switched.ok) {
+      return {
+        reply: formatQqWarning(switched.superseded ? "兴趣模型切换被更新的设置取代。" : "目标兴趣模型加载失败，已保留原模型。", [
+          `目标：${state.qq.proactive.judge.provider}/${model}`,
+          switched.error ? `错误：${String(switched.error.message || switched.error).slice(0, 120)}` : null
+        ].filter(Boolean))
+      };
+    }
     return {
-      reply: formatQqDone(`兴趣判定模型已切换：${model}`),
-      beforeSend: saveSettings
+      reply: formatQqDone(`兴趣判定模型已切换：${model}`, [`厂商：${state.qq.proactive.judge.provider}（切换厂商后再切回会沿用这个模型）`])
     };
   }
 
@@ -7104,6 +7350,7 @@ function clearQqContextForEvent(event, { silent = false, source = "new-dialog", 
   }
   if (event.groupId) {
     delete state.qq.proactive.pendingImageRequests[event.groupId];
+    qqPendingImageRequests.clear(event.groupId);
     delete state.qq.proactive.messageCountByGroupId[event.groupId];
     delete state.qq.proactive.lastJudgeAtByGroupId[event.groupId];
     delete state.qq.proactive.judgeInFlightByGroupId[event.groupId];
@@ -7125,6 +7372,7 @@ function clearQqContextForEvent(event, { silent = false, source = "new-dialog", 
   state.qq.codexSession.store = normalizeQqCodexSessionStore(null);
   trackBackgroundTask(saveQqCodexSessions(), () => null);
   state.qq.proactive.pendingImageRequests = createSafeRecord();
+  qqPendingImageRequests.clear();
   state.qq.proactive.messageCountByGroupId = createSafeRecord();
   state.qq.proactive.lastJudgeAtByGroupId = createSafeRecord();
   state.qq.proactive.judgeInFlightByGroupId = createSafeRecord();
@@ -7488,7 +7736,7 @@ function buildQqOwnerConfigDetail() {
           `长期知识：${state.qq.knowledgeBase.entries.length} 条`,
           `记忆范围：${Object.keys(state.qq.memory.entries).length} 个`,
           `最近消息范围：${Object.keys(state.qq.memory.recentMessages).length} 个`,
-          `待看图请求：${Object.keys(proactive.pendingImageRequests).length} 个`,
+          `待看图请求：${qqPendingImageRequests.size} 个`,
           `最近事件：${state.qq.events.length} 条`
         ]
       }
@@ -11000,7 +11248,9 @@ function shouldUseQqOwnerFileImageTask(event) {
     text,
     isOwner: hasQqPrivilegedAccess(event),
     isPrivateMessage: event.type === "private_message",
-    isMentioned: isMentionEvent(event),
+    // A judged alias call can answer normally but does not open the file and
+    // image task entry; that still needs a real @, a reply or a private chat.
+    isMentioned: isProtocolQqMentionEvent(event) || isLegacyAliasAddressEvent(event),
     isReplyToSelf: event.isReplyToSelf,
     hasImageReference: hasAnyQqImageReference(event)
   });
@@ -11578,31 +11828,31 @@ function buildWebLookupQuery(text) {
   return String(text || "").trim();
 }
 
-function noteQqImageRequest(event) {
-  if (!event.groupId || event.type === "private_message") return;
+// Opens a candidate for "看看图" text without a picture. It becomes a pending
+// request only if this same message is routed to the bot; see
+// qq-pending-image-request.js.
+function openQqImageRequestCandidate(event) {
+  if (!event.groupId || event.type === "private_message") return null;
   const text = stripMentionText(event.text);
-  if (!isQqImageLookRequest(text)) return;
-  if (Array.isArray(event.images) && event.images.length > 0) return;
-  if (Array.isArray(event.replyContext?.images) && event.replyContext.images.length > 0) return;
-  state.qq.proactive.pendingImageRequests[event.groupId] = {
-    at: Date.now(),
+  if (!isQqImageLookRequest(text)) return null;
+  if (Array.isArray(event.images) && event.images.length > 0) return null;
+  if (Array.isArray(event.replyContext?.images) && event.replyContext.images.length > 0) return null;
+  return qqPendingImageRequests.open(event.groupId, {
     senderId: event.senderId,
+    messageId: event.raw?.message_id,
     text: text || "看图"
-  };
+  });
 }
 
-function hasPendingQqImageRequest(event) {
+async function hasPendingQqImageRequest(event) {
   if (!event.groupId || !Array.isArray(event.images) || event.images.length === 0) return false;
-  const pending = state.qq.proactive.pendingImageRequests[event.groupId];
-  if (!pending) return false;
-  const ageMs = Date.now() - Number(pending.at || 0);
-  if (ageMs > 60 * 1000) {
-    delete state.qq.proactive.pendingImageRequests[event.groupId];
-    return false;
-  }
-  if (pending.senderId && event.senderId && pending.senderId !== event.senderId) return false;
-  event.pendingImageRequestText = pending.text || "看图";
-  delete state.qq.proactive.pendingImageRequests[event.groupId];
+  const text = await qqPendingImageRequests.match(event.groupId, {
+    senderId: event.senderId,
+    hasImages: true,
+    maxWaitMs: QQ_PENDING_IMAGE_REQUEST_WAIT_MS
+  });
+  if (!text) return false;
+  event.pendingImageRequestText = text;
   return true;
 }
 
@@ -11999,6 +12249,7 @@ async function rememberQqExchange(event, reply) {
 async function resetQqOrdinaryInterestAfterDeliveredBotReply(event, deliveryReceipt) {
   if (!event?.groupId || Number(deliveryReceipt?.deliveredBubbleCount || 0) <= 0) return false;
   const groupId = String(event.groupId);
+  markQqShareCardRoastDelivered(event);
   if (isMentionEvent(event)) qqEngagedWindows.open(groupId);
   else qqEngagedWindows.renewIfActive(groupId);
   const persistedCycleCleared = Boolean(
@@ -12093,7 +12344,9 @@ async function rememberQqGroupMessage(event) {
   if (isBannedQqSender(event)) return;
   if (hasUnhandledQqAudio(event)) return;
   await attachQqKnowledgeIdentity(event);
-  const text = compactMemoryText(normalizeQqDisplayText(stripMentionText(event.text) || event.text || ""));
+  // Only protocol markers are removed: a nickname in the text is evidence for
+  // later addressing and interest judgments.
+  const text = compactMemoryText(normalizeQqDisplayText(stripQqProtocolMarkers(event.text) || event.text || ""));
   const images = snapshotQqContextImages(event.images, { limit: 12 });
   if (!text && images.length === 0 && !event.hasAtSegment && !event.hasReplySegment) return;
   const entry = {
@@ -12261,6 +12514,7 @@ async function processQqReplyEvent(event, options = {}) {
     proactive: Boolean(options.decisionOverride?.proactive),
     alreadyRemembered: Boolean(options.alreadyRemembered)
   }, "lifecycle", { traceId });
+  let imageRequestCandidate = null;
   if (!options.alreadyRemembered) {
     const rememberStartedAt = Date.now();
     const activityScopeId = getQqMemoryScopeId(event);
@@ -12274,14 +12528,20 @@ async function processQqReplyEvent(event, options = {}) {
     }
     try {
       await rememberQqGroupMessage(event);
-      if (source === "onebot") noteQqImageRequest(event);
+      if (source === "onebot") imageRequestCandidate = openQqImageRequestCandidate(event);
     } finally {
       timings.rememberDurationMs = Date.now() - rememberStartedAt;
     }
   }
 
   const decisionStartedAt = Date.now();
-  let decision = options.decisionOverride || await shouldRespondToQq(event);
+  let decision;
+  try {
+    decision = options.decisionOverride || await shouldRespondToQq(event);
+  } catch (error) {
+    imageRequestCandidate?.settle(false);
+    throw error;
+  }
   const proactivePipeline = validateQqTwoModelProactiveDecision(decision, {
     forceRequired: Boolean(event.qqColdProactive || event.qqPrivateProactive)
   });
@@ -12311,6 +12571,9 @@ async function processQqReplyEvent(event, options = {}) {
       logger.debug("QQ autonomous proactive two-model contract verified", pipelineDetails, "interest", { traceId });
     }
   }
+  // The look-at-image request counts only when its own message reached the
+  // bot (an address or an approved interest decision), not for commands.
+  imageRequestCandidate?.settle(Boolean(decision.ok) && decision.reason !== "QQ command");
   if (event.qqConversationFollowUpBatch?.anchorKey) {
     qqConversationFollowUps.markDecision(
       getQqMemoryScopeId(event),
@@ -13455,14 +13718,18 @@ function saveQqChatContinuity() {
 const QQ_SHARE_CARD_ROAST_COOLDOWN_MS = 2 * 60_000;
 const qqLastShareCardRoastAtByGroupId = new Map();
 
-function takeQqShareCardRoast(event) {
+function peekQqShareCardRoast(event) {
   if (!event?.groupId || !state.qq.proactive.enabled || !isQqProactiveGroup(event.groupId)) return "";
   const title = findQqBilibiliShareTitle(event);
   if (!title) return "";
   const groupId = String(event.groupId);
   if (Date.now() - Number(qqLastShareCardRoastAtByGroupId.get(groupId) || 0) < QQ_SHARE_CARD_ROAST_COOLDOWN_MS) return "";
-  qqLastShareCardRoastAtByGroupId.set(groupId, Date.now());
   return title;
+}
+
+function markQqShareCardRoastDelivered(event) {
+  if (!event?.groupId || !event.qqShareCardRoastTitle) return;
+  qqLastShareCardRoastAtByGroupId.set(String(event.groupId), Date.now());
 }
 
 // Group chats get no tool that can read arbitrary local files: Codex's shell
@@ -15277,6 +15544,7 @@ async function handleApi(req, res) {
     const body = await readBody(req, { requireJson: true });
     let change;
     const previousProvider = state.qq.proactive.judge.provider;
+    const previousTarget = getQqInterestModelRuntimeTarget();
     try {
       change = applyDashboardBotSettings(state, body);
       syncActiveQqInterestModelConfig({
@@ -15287,6 +15555,28 @@ async function handleApi(req, res) {
         return sendJson(res, 400, { error: error.message });
       }
       throw error;
+    }
+    // A provider or model change goes through the same switcher as the idle
+    // switch and QQ commands: the target loads first and is committed only on
+    // success, and it supersedes any switch still loading.
+    const nextTarget = getQqInterestModelRuntimeTarget();
+    if (nextTarget.provider !== previousTarget.provider
+      || nextTarget.model !== previousTarget.model
+      || nextTarget.baseUrl !== previousTarget.baseUrl) {
+      state.qq.proactive.judge.provider = previousTarget.provider;
+      state.qq.proactive.judge.model = previousTarget.model;
+      state.qq.proactive.judge.baseUrl = previousTarget.baseUrl;
+      syncActiveQqInterestModelConfig();
+      const switched = await qqInterestModelSwitcher.request(nextTarget, { reason: "dashboard" });
+      if (!switched.ok) {
+        change.restore();
+        syncActiveQqInterestModelConfig();
+        return sendJson(res, switched.superseded ? 409 : 502, {
+          error: switched.superseded
+            ? "Interest model change was superseded by a newer change"
+            : `Interest model failed to load; the previous model is still active: ${String(switched.error?.message || switched.error || "unknown error").slice(0, 200)}`
+        });
+      }
     }
     try {
       await saveSettings();

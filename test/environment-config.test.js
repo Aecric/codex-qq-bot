@@ -91,6 +91,66 @@ test("normalizes DeepSeek and custom interest model credentials", () => {
   assert.equal(custom.customInterestModelBaseUrl, "https://models.example/v1");
 });
 
+test("QQ alias routing defaults to the addressing judge and accepts shadow mode", () => {
+  const defaults = createEnvironmentConfig({});
+  assert.equal(defaults.qqAliasRoutingMode, "judge");
+  assert.deepEqual(defaults.qqAliasRoutingGroups, []);
+  assert.equal(defaults.qqAliasJudgeTimeoutMs, 5_000);
+
+  assert.equal(createEnvironmentConfig({ CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING: "shadow" }).qqAliasRoutingMode, "shadow");
+  assert.equal(createEnvironmentConfig({ CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING: " Legacy " }).qqAliasRoutingMode, "legacy");
+  assert.equal(createEnvironmentConfig({ CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING: "garbage" }).qqAliasRoutingMode, "judge");
+  assert.equal(createEnvironmentConfig({ CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING: "" }).qqAliasRoutingMode, "judge");
+
+  assert.deepEqual(
+    createEnvironmentConfig({ CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING_GROUPS: "123, 456" }).qqAliasRoutingGroups,
+    ["123", "456"]
+  );
+  assert.deepEqual(
+    createEnvironmentConfig({ CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING_GROUPS: " 123\n456,,789 " }).qqAliasRoutingGroups,
+    ["123", "456", "789"]
+  );
+});
+
+test("QQ alias judge timeout is clamped to one to twenty seconds", () => {
+  const timeout = (value) => createEnvironmentConfig({ CODEX_REMOTE_CONTACT_QQ_ALIAS_JUDGE_TIMEOUT_MS: value }).qqAliasJudgeTimeoutMs;
+  assert.equal(timeout(undefined), 5_000);
+  assert.equal(timeout(""), 5_000);
+  assert.equal(timeout("not a number"), 5_000);
+  assert.equal(timeout("3000"), 3_000);
+  assert.equal(timeout("3000.9"), 3_000);
+  assert.equal(timeout("10"), 1_000);
+  assert.equal(timeout("0"), 1_000);
+  assert.equal(timeout("999999"), 20_000);
+});
+
+test("per-provider interest judge models come from the environment", () => {
+  assert.deepEqual(createEnvironmentConfig({}).qqProactiveJudgeModelsByProvider, {});
+
+  const config = createEnvironmentConfig({
+    CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_MODELS: "ollama=qwen3.5:4b"
+  });
+  assert.deepEqual(config.qqProactiveJudgeModelsByProvider, { ollama: "qwen3.5:4b" });
+  assert.equal(config.qqProactiveJudgeModel, "openrouter/free", "the active provider keeps its default model");
+
+  const several = createEnvironmentConfig({
+    CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_MODELS: "ollama=qwen3.5:4b, mystery=x, codex=bad model"
+  });
+  assert.deepEqual(several.qqProactiveJudgeModelsByProvider, { ollama: "qwen3.5:4b" }, "unknown providers and invalid ids are dropped");
+
+  const single = createEnvironmentConfig({
+    CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_PROVIDER: "ollama",
+    CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_MODEL: "gemma-custom:2b",
+    CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_MODELS: "codex=gpt-6-other"
+  });
+  assert.equal(single.qqProactiveJudgeModel, "gemma-custom:2b");
+  assert.deepEqual(
+    single.qqProactiveJudgeModelsByProvider,
+    { codex: "gpt-6-other", ollama: "gemma-custom:2b" },
+    "the single-model variable becomes the override of the configured provider"
+  );
+});
+
 test("selects the agent engine and Claude Code defaults from the environment", () => {
   const defaults = createEnvironmentConfig({});
   assert.equal(defaults.agentEngine, "codex");

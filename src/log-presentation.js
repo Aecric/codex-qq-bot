@@ -112,6 +112,8 @@ const messageTranslationsZh = Object.freeze({
   "QQ interest judge switched by owner presence": "兴趣判定已按主人是否在用电脑切换模型",
   "QQ interest idle switch failed": "兴趣判定闲置切换失败",
   "Unable to unload the local interest model": "无法卸载本机兴趣模型",
+  "QQ interest model change kept the previous model because the target failed to load": "目标兴趣模型加载失败，已保留原模型",
+  "QQ alias address judged": "昵称称呼对象已判定",
   "QQ quota saver mode left": "QQ 已退出额度省电模式",
   "QQ reply post-processing failed": "QQ 回复后处理失败",
   "Unable to process queued QQ replies": "处理排队中的 QQ 回复失败",
@@ -861,7 +863,7 @@ const detailValuesZh = Object.freeze({
     "history.search": "聊天记录搜索",
     "administrator.add": "添加 Bot 管理员", "administrator.remove": "移除 Bot 管理员",
     "friend.add": "主动加好友", "group.join": "主动加群", "settings.update": "更新设置", "settings.persist": "配置持久化",
-    "interest.follow_up_batch": "连续对话兴趣合批", "learning.language_statistics": "语言与标点统计",
+    "interest.follow_up_batch": "连续对话兴趣合批", "addressing.alias_judge": "昵称称呼判断", "learning.language_statistics": "语言与标点统计",
     "learning.snapshot": "自适应学习快照", "learning.style_review": "语言风格复盘",
     "learning.global_persona": "全局人设更新", "memory.scope_summary": "范围记忆总结",
     "memory.person_promotion": "深刻人物印象统一记忆", "memory.semantic_sync": "语义记忆同步",
@@ -982,7 +984,9 @@ const detailValuesZh = Object.freeze({
     conversation_follow_up_batch_collecting: "连续对话静默合批中",
     conversation_follow_up_batch_capped: "连续对话已达条数上限",
     conversation_follow_up_batch_closed: "连续对话批次已关闭",
-    approved_conversation_follow_up: "已批准连续对话进入主回复融合"
+    approved_conversation_follow_up: "已批准连续对话进入主回复融合",
+    alias_confirmed: "昵称呼唤已确认", alias_declined: "昵称未在叫 Bot", alias_duplicate: "重复的昵称消息",
+    pending_image_request: "待看图请求"
   },
   triggerKind: {
     mention: "@ 机器人",

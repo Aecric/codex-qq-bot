@@ -49,12 +49,13 @@ test("dashboard Bot settings update bounded runtime controls and can roll back",
     judgeMaxRecentMessages: 10,
     judgeProvider: "openrouter",
     judgeApiKeyConfigured: true,
+    judgeModelsByProvider: { openrouter: "vendor/new-model:free" },
     judgeProviders: [
-      { id: "openrouter", label: "OpenRouter", defaultModel: "openrouter/free" },
-      { id: "deepseek", label: "DeepSeek", defaultModel: "deepseek-v4-flash" },
-      { id: "custom", label: "自定义兼容服务", defaultModel: "gpt-4o-mini" },
-      { id: "codex", label: "本机 Codex", defaultModel: "gpt-6-luna" },
-      { id: "ollama", label: "本机 Ollama", defaultModel: "gemma4:e4b-it-qat" }
+      { id: "openrouter", label: "OpenRouter", defaultModel: "openrouter/free", model: "vendor/new-model:free" },
+      { id: "deepseek", label: "DeepSeek", defaultModel: "deepseek-v4-flash", model: "deepseek-v4-flash" },
+      { id: "custom", label: "自定义兼容服务", defaultModel: "gpt-4o-mini", model: "gpt-4o-mini" },
+      { id: "codex", label: "本机 Codex", defaultModel: "gpt-6-luna", model: "gpt-6-luna" },
+      { id: "ollama", label: "本机 Ollama", defaultModel: "gemma4:e4b-it-qat", model: "gemma4:e4b-it-qat" }
     ],
     selfPersonaGenerationEnabled: true,
     replyScrubEnabled: true,
@@ -76,6 +77,8 @@ test("dashboard Bot settings update bounded runtime controls and can roll back",
   change.restore();
   assert.equal(readDashboardBotSettings(state).judgeEveryMessages, 20);
   assert.equal(readDashboardBotSettings(state).webLookupEnabled, true);
+  assert.deepEqual(readDashboardBotSettings(state).judgeModelsByProvider, {});
+  assert.equal(readDashboardBotSettings(state).judgeModel, "provider/model:free");
 });
 
 test("dashboard Bot settings preserve enhancer and proactive invariants", () => {
@@ -99,6 +102,135 @@ test("dashboard Bot settings switch interest providers with safe defaults", () =
   change.restore();
   assert.equal(state.qq.proactive.judge.provider, "openrouter");
   assert.equal(state.qq.proactive.judge.baseUrl, "https://openrouter.ai/api/v1");
+});
+
+function createPerProviderState({ provider = "codex", model = "gpt-6-luna", modelsByProvider = {} } = {}) {
+  const state = createState();
+  state.qq.proactive.judge.provider = provider;
+  state.qq.proactive.judge.model = model;
+  state.qq.proactive.judge.baseUrl = "codex://local";
+  state.qq.proactive.judge.modelsByProvider = modelsByProvider;
+  return state;
+}
+
+test("readDashboardBotSettings exposes the normalized per-provider model map and the model each provider would use", () => {
+  const state = createPerProviderState({
+    modelsByProvider: { ollama: " qwen3.5:4b ", mystery: "dropped", deepseek: "bad model" }
+  });
+  const settings = readDashboardBotSettings(state);
+  assert.deepEqual(settings.judgeModelsByProvider, { ollama: "qwen3.5:4b" });
+  const modelOf = Object.fromEntries(settings.judgeProviders.map((entry) => [entry.id, entry.model]));
+  assert.equal(modelOf.ollama, "qwen3.5:4b");
+  assert.equal(modelOf.codex, "gpt-6-luna");
+  assert.equal(modelOf.deepseek, "deepseek-v4-flash");
+  assert.equal(settings.judgeProviders.find((entry) => entry.id === "ollama").defaultModel, "gemma4:e4b-it-qat");
+
+  assert.deepEqual(readDashboardBotSettings(createState()).judgeModelsByProvider, {}, "older state without a map reads as empty");
+});
+
+test("switching judgeProvider picks the saved per-provider model instead of the provider default", () => {
+  const state = createPerProviderState({ modelsByProvider: { ollama: "qwen3.5:4b" } });
+  const change = applyDashboardBotSettings(state, { judgeProvider: "ollama" });
+  assert.equal(change.settings.judgeProvider, "ollama");
+  assert.equal(change.settings.judgeModel, "qwen3.5:4b");
+  assert.equal(state.qq.proactive.judge.model, "qwen3.5:4b");
+  assert.equal(state.qq.proactive.judge.baseUrl, "http://127.0.0.1:11434/v1");
+  assert.deepEqual(state.qq.proactive.judge.modelsByProvider, { ollama: "qwen3.5:4b" });
+
+  const back = applyDashboardBotSettings(state, { judgeProvider: "codex" });
+  assert.equal(back.settings.judgeModel, "gpt-6-luna", "a provider without an override uses its default");
+  assert.deepEqual(state.qq.proactive.judge.modelsByProvider, { ollama: "qwen3.5:4b" }, "the Ollama choice survives the round trip");
+
+  const again = applyDashboardBotSettings(state, { judgeProvider: "ollama" });
+  assert.equal(again.settings.judgeModel, "qwen3.5:4b");
+
+  const explicit = applyDashboardBotSettings(state, { judgeProvider: "deepseek", judgeModel: "deepseek-custom" });
+  assert.equal(explicit.settings.judgeModel, "deepseek-custom", "an explicit judgeModel wins over the saved one");
+  assert.deepEqual(state.qq.proactive.judge.modelsByProvider, { ollama: "qwen3.5:4b", deepseek: "deepseek-custom" });
+});
+
+test("setting judgeModel records it for the active provider only", () => {
+  const state = createState();
+  const change = applyDashboardBotSettings(state, { judgeModel: "vendor/other:free" });
+  assert.equal(change.settings.judgeModel, "vendor/other:free");
+  assert.deepEqual(state.qq.proactive.judge.modelsByProvider, { openrouter: "vendor/other:free" });
+  assert.equal(change.settings.judgeProviders.find((entry) => entry.id === "openrouter").model, "vendor/other:free");
+  assert.equal(change.settings.judgeProviders.find((entry) => entry.id === "ollama").model, "gemma4:e4b-it-qat");
+
+  const reset = applyDashboardBotSettings(state, { judgeModel: "openrouter/free" });
+  assert.equal(reset.settings.judgeModel, "openrouter/free");
+  assert.deepEqual(state.qq.proactive.judge.modelsByProvider, {}, "choosing the default drops the override");
+
+  change.restore();
+  assert.equal(state.qq.proactive.judge.model, "provider/model:free");
+  assert.deepEqual(state.qq.proactive.judge.modelsByProvider, {});
+});
+
+test("a judgeModelsByProvider patch edits a backup provider without touching the active model", () => {
+  const state = createPerProviderState();
+  const change = applyDashboardBotSettings(state, { judgeModelsByProvider: { ollama: "qwen3.5:4b" } });
+  assert.equal(change.settings.judgeProvider, "codex");
+  assert.equal(change.settings.judgeModel, "gpt-6-luna");
+  assert.equal(state.qq.proactive.judge.model, "gpt-6-luna");
+  assert.equal(state.qq.proactive.judge.baseUrl, "codex://local");
+  assert.deepEqual(change.settings.judgeModelsByProvider, { ollama: "qwen3.5:4b" });
+  assert.deepEqual(state.qq.proactive.judge.modelsByProvider, { ollama: "qwen3.5:4b" });
+  assert.equal(change.settings.judgeProviders.find((entry) => entry.id === "ollama").model, "qwen3.5:4b");
+
+  const other = applyDashboardBotSettings(state, { judgeModelsByProvider: { deepseek: "deepseek-custom" } });
+  assert.deepEqual(other.settings.judgeModelsByProvider, { ollama: "qwen3.5:4b", deepseek: "deepseek-custom" }, "a patch merges per provider");
+
+  const cleared = applyDashboardBotSettings(state, { judgeModelsByProvider: { ollama: "" } });
+  assert.deepEqual(cleared.settings.judgeModelsByProvider, { deepseek: "deepseek-custom" }, "an empty string removes the override");
+  assert.equal(cleared.settings.judgeModel, "gpt-6-luna");
+
+  const defaulted = applyDashboardBotSettings(state, { judgeModelsByProvider: { deepseek: "deepseek-v4-flash" } });
+  assert.deepEqual(defaulted.settings.judgeModelsByProvider, {}, "choosing the default also removes the override");
+});
+
+test("a judgeModelsByProvider patch for the active provider updates the live model", () => {
+  const state = createPerProviderState({ provider: "ollama", model: "gemma4:e4b-it-qat" });
+  const change = applyDashboardBotSettings(state, { judgeModelsByProvider: { ollama: "qwen3.5:4b" } });
+  assert.equal(change.settings.judgeModel, "qwen3.5:4b");
+  assert.equal(state.qq.proactive.judge.model, "qwen3.5:4b");
+
+  const reset = applyDashboardBotSettings(state, { judgeModelsByProvider: { ollama: "" } });
+  assert.equal(reset.settings.judgeModel, "gemma4:e4b-it-qat");
+});
+
+test("a malformed judgeModelsByProvider patch throws without mutating state", () => {
+  const state = createPerProviderState({ modelsByProvider: { ollama: "qwen3.5:4b" } });
+  const snapshot = structuredClone(state);
+
+  assert.throws(
+    () => applyDashboardBotSettings(state, { judgeEveryMessages: 30, judgeModelsByProvider: { ollama: "qwen3.5:9b", mystery: "x" } }),
+    (error) => error instanceof RangeError && /unknown provider: mystery/.test(error.message)
+  );
+  assert.throws(
+    () => applyDashboardBotSettings(state, { judgeModelsByProvider: { ollama: "bad model id" } }),
+    (error) => error instanceof RangeError && /valid provider model id/.test(error.message)
+  );
+  assert.throws(() => applyDashboardBotSettings(state, { judgeModelsByProvider: ["ollama"] }), RangeError);
+  assert.throws(() => applyDashboardBotSettings(state, { judgeModelsByProvider: null }), RangeError);
+  assert.throws(() => applyDashboardBotSettings(state, { judgeModelsByProvider: "ollama=qwen" }), RangeError);
+  assert.deepEqual(state, snapshot);
+});
+
+test("restore puts the per-provider model map back", () => {
+  const state = createPerProviderState({ modelsByProvider: { ollama: "qwen3.5:4b" } });
+  const change = applyDashboardBotSettings(state, {
+    judgeModelsByProvider: { ollama: "", deepseek: "deepseek-custom" },
+    judgeProvider: "deepseek"
+  });
+  assert.deepEqual(state.qq.proactive.judge.modelsByProvider, { deepseek: "deepseek-custom" });
+  assert.equal(state.qq.proactive.judge.provider, "deepseek");
+
+  change.restore();
+  assert.deepEqual(state.qq.proactive.judge.modelsByProvider, { ollama: "qwen3.5:4b" });
+  assert.equal(state.qq.proactive.judge.provider, "codex");
+  assert.equal(state.qq.proactive.judge.model, "gpt-6-luna");
+  assert.equal(state.qq.proactive.judge.baseUrl, "codex://local");
+  assert.deepEqual(readDashboardBotSettings(state).judgeModelsByProvider, { ollama: "qwen3.5:4b" });
 });
 
 test("dashboard Bot settings reject malformed values without mutation", () => {
@@ -179,4 +311,18 @@ test("saved behavior settings are clamped and keep environment values for missin
   assert.equal(loaded.judgeActiveProvider, "ollama");
   assert.equal(loaded.taskPleadingAsks, 3);
   assert.equal(loaded.quotaSaverBelow, 15);
+});
+
+test("dashboard backup-provider model edits leave a live model that is not in the override map alone", () => {
+  const state = createState();
+  const change = applyDashboardBotSettings(state, { judgeModelsByProvider: { ollama: "qwen3.5:4b" } });
+  assert.equal(state.qq.proactive.judge.model, "provider/model:free");
+  assert.equal(change.settings.judgeModel, "provider/model:free");
+  assert.equal(state.qq.proactive.judge.modelsByProvider.ollama, "qwen3.5:4b");
+});
+
+test("dashboard override for the active provider updates the live model", () => {
+  const state = createState();
+  applyDashboardBotSettings(state, { judgeModelsByProvider: { openrouter: "vendor/other:free" } });
+  assert.equal(state.qq.proactive.judge.model, "vendor/other:free");
 });

@@ -169,6 +169,36 @@ A confirmed delivered Bot bubble clears the group's pre-delivery ordinary-intere
 
 Cold-group and private-outreach checks persist the pre-judgment human-message watermark in `data/qq-personas.json`. Without a newer human message, `no_new_human_messages` blocks another provider call even after cooldown or restart; Bot messages do not count. Existing state falls back to the previous check time. Inspect the `interest` logs for this reason when an idle conversation correctly stays quiet.
 
+## Rolling out nickname addressing
+
+A nickname or alias in plain group text no longer calls the Bot directly: a small alias-address judge decides whether it is aimed at the Bot (see [Configuration](CONFIGURATION.md#nickname-addressing) and [Architecture](ARCHITECTURE.md)). Real @, replies to the Bot, private chats and pokes are unaffected. Roll the judge out in stages so a regression touches as little as possible. Each change below only needs a restart of Hub.
+
+1. **Shadow.** Set `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING=shadow`. Nicknames keep the old direct route; the judge only logs what it would decide and sends no extra QQ messages. Let it run for a few days of real traffic and compare the verdicts with what the Bot actually did.
+2. **One group.** Set `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING=judge` and `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING_GROUPS=GROUP_ID` (comma-separated for several). Only the listed groups use the judge; every other group stays `legacy`.
+3. **All groups.** Leave `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING=judge` (the default) and clear `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING_GROUPS`.
+
+Where to look:
+
+```bash
+curl -fsS --max-time 3 http://127.0.0.1:3789/api/state | jq '.qq.proactive.addressing, .qq.proactive.judgeModels'
+npm run ncc -- logs --category interest --operation addressing.alias_judge --tail 100
+```
+
+`qq.proactive.addressing` shows the effective mode, rollout groups and timeout, plus counters per mode (totals, outcomes, targets, reason codes, timeouts, invalid output, heuristic fallbacks) and judge latency P50/P95 since the Hub started. `qq.proactive.judgeModels` shows the interest provider and model, the saved per-provider models and the load status (target, active model, last load error) of the model switcher. The `addressing.alias_judge` log records only mode, outcome, target, reason code, provider/model, prompt version and timings, never message text.
+
+Rollback:
+
+- Set `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING=legacy` and restart only Hub. The old substring route returns at once; there is no data to migrate.
+- If a smaller local judge model caused the regression, set the Ollama model back to Gemma (`gemma4:e4b-it-qat`) with the owner QQ command `/兴趣模型 gemma4:e4b-it-qat` while the interest provider is `ollama`, or on the dashboard Intelligence page. The model is remembered per provider, so other providers keep theirs. Also remove it from `CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_MODELS` (and `..._JUDGE_MODEL`) in `config/local.env`, otherwise a restart seeds it again. A failed Ollama load keeps the previous working model.
+
+To compare judge models offline before changing anything, `scripts/qq-addressing-replay.mjs` replays labeled samples through the alias-address judge:
+
+```bash
+node scripts/qq-addressing-replay.mjs --input samples.jsonl --provider ollama --model qwen3.5:4b
+```
+
+It reports the miss rate of direct calls, the false-trigger rate, P50/P95 latency, timeouts and invalid JSON; `--mode heuristic` and `--mode legacy` compare the deterministic fallback and the old substring route on the same samples without a model, and `--help` lists every option (the `codex` provider needs the Hub and is not supported there). The report never prints sample text. Keep the sample file outside the repository: it contains chat text.
+
 ## Acceptance checks
 
 ```bash
@@ -292,6 +322,7 @@ Do not pull directly over local changes; let Codex assess conflicts and update s
 | `get_login_info` returns 401/403 | Token mismatch | Align OneBot and Hub tokens without printing them |
 | QQ channel is false | OneBot unavailable, channel disabled or state not saved | Inspect state, settings and `ncc connect` |
 | Allowlisted group does not reply | Wrong group, no mention/reply, or sender banned | Inspect state plus `qq` and `onebot` logs |
+| A nickname call is ignored, or the Bot answers when it is only talked about | Alias-address judge said `other`/`unclear`, timed out, or the group is still on `legacy`/`shadow` | Inspect `addressing.alias_judge` logs and `qq.proactive.addressing` in `/api/state`; see Rolling out nickname addressing |
 | Codex generation fails | Login, CLI path, model access or queue pressure | Check CLI/version/login, maintenance and `codex` logs |
 | Image inspection ends with `CODEX_APP_SERVER_OUTPUT_LIMIT` | App Server echoes base64 tool images in multiple protocol events, exhausting the ordinary 8 MiB output budget | Run the current Hub code: exact image data URLs supplied by this turn have a separate allowance of up to four echoes per tool result. Text, unknown images and unfinished frames remain bounded; duplicate call ids do not replenish the allowance. Restart only Hub after verification. |
 | Proactive interest stays silent | Empty cycle, disabled/failed judge, low interest or stale result | Inspect `interest` logs, the selected provider credential/model, judge policy and group activity |

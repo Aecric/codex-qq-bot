@@ -145,11 +145,14 @@ export async function shouldProactivelyReplyToQq(event = {}, state = {}, helpers
   const keywordTriggerDue = triggerMode === "message" && Boolean(helpers.interestKeywordMatch?.matched);
   const knowledgeTriggerDue = triggerMode === "message" && Boolean(helpers.knowledgeMatches?.length);
   const conversationFollowUpDue = triggerMode === "message" && Boolean(helpers.conversationFollowUp?.candidate);
+  // A Bilibili share card is an interest signal: it earns a judgment now, but
+  // the reply still needs the model's approval like any other chime-in.
+  const shareCardDue = triggerMode === "message" && Boolean(helpers.interestSignals?.shareCardTitle);
   const messageTriggerDue = currentCount >= judgeEveryMessages;
   const timeTriggerDue = judgeEveryMinutes > 0 && currentCount > 0 && elapsedMs >= judgeEveryMinutes * minuteMs;
   const triggerDue = triggerMode === "time"
     ? timeTriggerDue
-    : (conversationFollowUpDue || knowledgeTriggerDue || keywordTriggerDue || messageTriggerDue);
+    : (conversationFollowUpDue || shareCardDue || knowledgeTriggerDue || keywordTriggerDue || messageTriggerDue);
   if (!triggerDue) {
     return {
       ok: false,
@@ -182,7 +185,7 @@ export async function shouldProactivelyReplyToQq(event = {}, state = {}, helpers
         ? "minute_interval"
         : conversationFollowUpDue
           ? "bot_conversation_follow_up"
-          : knowledgeTriggerDue ? "knowledge_slang" : keywordTriggerDue ? "persona_keyword" : "message_count",
+          : shareCardDue ? "share_card" : knowledgeTriggerDue ? "knowledge_slang" : keywordTriggerDue ? "persona_keyword" : "message_count",
       interestKeywordMatch: helpers.interestKeywordMatch || null,
       knowledgeMatches: helpers.knowledgeMatches || [],
       interestSignals: helpers.interestSignals || null,
@@ -662,6 +665,12 @@ export async function runQqInterestModelStructuredTask(options = {}) {
     ? options.normalizeValue
     : (value) => value;
   const controller = new AbortController();
+  // A caller deadline (for example the alias-address judge's total limit)
+  // stops the stream as well as the per-token idle timeout does.
+  const externalSignal = options.signal && typeof options.signal.addEventListener === "function" ? options.signal : null;
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal?.aborted) controller.abort();
+  else externalSignal?.addEventListener("abort", onExternalAbort, { once: true });
   let idleTimeout = null;
   let idleTimedOut = false;
   const resetIdleTimeout = () => {
@@ -779,6 +788,7 @@ export async function runQqInterestModelStructuredTask(options = {}) {
     };
   } finally {
     clearTimeout(idleTimeout);
+    externalSignal?.removeEventListener("abort", onExternalAbort);
   }
 }
 

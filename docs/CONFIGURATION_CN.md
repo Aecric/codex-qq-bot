@@ -103,6 +103,7 @@ npm run ncc -- setup
 | `qq.enhancer.enabled` | 图片、风格、兴趣等 QQ 增强总开关 |
 | `qq.webLookup.enabled` | QQ 联网查询运行时开关；可由网页端持久化修改 |
 | `qq.proactive.*` | 普通消息/分钟兴趣触发与 judge 配置 |
+| `qq.proactive.judge.modelsByProvider` | 按厂商分别保存的兴趣判定模型（厂商到模型 ID，例如 `{"ollama":"qwen3.5:4b"}`）；没有条目的厂商使用默认模型。旧设置首次加载时自动迁移：已保存的 `model` 归给保存它时所用的厂商 |
 | `qq.commandPermissions` | 非主人可见且可执行的公共/用户级指令 |
 | `qq.codexSession.defaultMode` | 未单独覆盖 scope 的 `auto` / `persistent` / `temporary` 默认模式 |
 | `qq.codexSession.scopes` | 按群号或 `private:QQ号` 覆盖会话模式；线程 ID 不写入设置文件 |
@@ -266,15 +267,16 @@ Hub 和 OneBot 两端 token 应一致。未配置 token 时，Webhook 仅信任 
 | `..._JUDGE_EVERY_MESSAGES` | `20` | 普通未 @ 消息阈值，范围 1–1000 |
 | `..._JUDGE_EVERY_MINUTES` | `5` | 非空周期的分钟阈值；`0` 关闭分钟分支 |
 | `..._JUDGE_PROVIDER` | `openrouter` | 兴趣模型厂商：`openrouter`、`deepseek`、`custom`、`codex` 或 `ollama` |
-| `..._JUDGE_MODEL` | 随厂商变化 | OpenRouter 默认 `openrouter/free`；DeepSeek 默认 `deepseek-v4-flash` |
+| `..._JUDGE_MODEL` | 随厂商变化 | OpenRouter 默认 `openrouter/free`；DeepSeek 默认 `deepseek-v4-flash`。只作用于所配置的 `..._JUDGE_PROVIDER` |
+| `..._JUDGE_MODELS` | 空 | 按厂商给出模型，格式为逗号分隔的 `厂商=模型`，例如 `ollama=qwen3.5:4b,codex=gpt-6-luna`。它们作为 `qq.proactive.judge.modelsByProvider` 的初始值；`data/settings.json` 里已保存的条目优先，`..._JUDGE_MODEL` 仍会覆盖所配置的厂商 |
 | `..._JUDGE_API_KEY` | 空 | `custom` 厂商的 key |
 | `..._JUDGE_BASE_URL` | 空 | `custom` 厂商的 OpenAI 兼容 API 根地址 |
 | `..._JUDGE_TIMEOUT_MS` | `6500` | judge 流式空闲超时 |
 | `..._JUDGE_VISION` | `auto` | 普通兴趣闸门是否也看被判断消息里的图片（最多 2 张、缩成小 JPEG 预览）：`auto` 对每个厂商/模型先试一次，厂商拒绝图片输入时改为纯文字并记住到重启，`on` 总是尝试，`off` 从不发送图片。图片会发给所配置的第三方兴趣模型服务 |
 | `..._JUDGE_IDLE_SWITCH` | 关闭 | 设为 `1` 时在 macOS 上按主人是否在用电脑选择兴趣厂商：键盘或鼠标 30 秒内有操作时用“使用中厂商”并卸载本机模型；闲置达到阈值后先加载本机模型，再切到“闲置厂商”。额度省电模式下固定用闲置厂商。开启后厂商由它接管 |
 | `..._JUDGE_IDLE_AFTER_SECONDS` | `300` | 闲置多少秒后切到闲置厂商（60–86400） |
-| `..._JUDGE_ACTIVE_PROVIDER` | `codex` | 主人在用电脑时的厂商，使用该厂商默认模型 |
-| `..._JUDGE_IDLE_PROVIDER` | `ollama` | 电脑闲置时的厂商，使用该厂商默认模型 |
+| `..._JUDGE_ACTIVE_PROVIDER` | `codex` | 主人在用电脑时的厂商，使用该厂商已保存的按厂商模型，没有则用默认模型 |
+| `..._JUDGE_IDLE_PROVIDER` | `ollama` | 电脑闲置时的厂商，使用该厂商已保存的按厂商模型（备用模型，例如 `ollama=qwen3.5:4b`），没有则用默认模型 |
 | `CODEX_REMOTE_CONTACT_QQ_IMAGE_MAX_BYTES` | `20971520` | QQ 图片上限，默认 20 MiB |
 | `CODEX_REMOTE_CONTACT_QQ_COMPRESSED_IMAGE_MAX_EDGE` | `1600` | 压缩读取的最长边，范围 256–4096 像素；自动启动按 Hub 内存选择 1280/1600/2048 |
 | `CODEX_REMOTE_CONTACT_QQ_FILE_MAX_BYTES` | `52428800` | 模型按需下载入站 QQ 文件的单文件上限，范围 1 MiB–1 GiB |
@@ -290,6 +292,23 @@ Hub 和 OneBot 两端 token 应一致。未配置 token 时，Webhook 仅信任 
 模型自行判断回复是闲聊还是需要交付结果的实质任务。闲聊继续跟随群节奏；解题、证明、计算、代码、写作、翻译、总结及其短续答不套固定字数，按正确完成任务所需篇幅作答。投递层不再把正常模型回复硬裁到 900 字，闲聊字数建议也不会删掉回复中的任何句子；任何超过单条安全上限的气泡都会优先按段落和句子边界自动拆成多条有序 QQ 消息，只有无自然边界的连续长文本才硬切。超过本次最大气泡数时，最后一条会明确标注截断，而不会让 OneBot 用一条超限消息冒险发送。
 
 自我人格刷新阈值使用 `CODEX_REMOTE_CONTACT_QQ_SELF_PERSONA_*`；账号贴纸使用 `CODEX_REMOTE_CONTACT_QQ_ACCOUNT_STICKER_*`。所有精确名称、范围和默认值以 `src/config/environment.js` 为准。
+
+### 昵称称呼
+
+真正的 OneBot @Bot、回复 Bot、私聊和拍一拍仍是直接触发。群文本里出现 `branding.assistantMentions` 中的昵称/别名（初始值来自 `CODEX_REMOTE_CONTACT_ASSISTANT_MENTIONS`，逗号分隔）只算候选：由一个小型结构化“别名称呼 judge”判定对象是 `bot`、`other` 还是 `unclear`，并给出固定原因码。只有 `bot` 走直接回复路线；`other`、`unclear`、超时或出错都保持沉默，且这条消息之后不会再送去普通兴趣 judge。被 judge 确认的别名呼叫正常回答，但不会打开主人文件/图片任务入口，也不获得高于真正 @ 的权限。
+
+| 变量 | 默认值 | 作用 |
+| --- | --- | --- |
+| `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING` | `judge` | `judge` 由别名称呼 judge 判定；`shadow` 保留旧的子串直接路线，只记录 judge 会怎么判（不多发任何 QQ 消息）；`legacy` 是旧的子串匹配行为 |
+| `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING_GROUPS` | 空 | 逗号分隔的群号，用于单群灰度：设置后只有这些群使用上面的模式，其他群保持 `legacy`；留空则所有群都使用该模式 |
+| `CODEX_REMOTE_CONTACT_QQ_ALIAS_JUDGE_TIMEOUT_MS` | `5000` | 单次别名称呼判定的总时限，范围 1000–20000 |
+
+- judge 复用兴趣模型的厂商和模型。没有可用的兴趣模型（judge 关闭或没有 key）时，改用确定性的“呼唤语”启发式：名字在消息开头且后面是标点或 你/帮我/帮忙/快/在吗/在不在/来，或者名字在结尾且前面是逗号或空格。
+- 同一个群消息 ID 的重复事件只判定一次。已打开的续聊观察窗口里，别名候选占用窗口名额，不再做第二次普通判定。
+- 群历史保留文本别名（只剥离 CQ 码等协议标记），这样各 judge 能看到昵称。
+- `QQ alias address judged` 日志（operation `addressing.alias_judge`）只记录模式、结果、对象、原因码、厂商/模型、提示词版本和耗时，不含消息正文和模型原始输出。聚合计数与 P50/P95 延迟在 `/api/state` 的 `qq.proactive.addressing` 下。
+- 待处理图片请求（“帮我看看图”之后同一发送者发图）现在只有在那条文字消息本身被路由给 Bot 时才触发：真正的 @、被 judge 确认的别名呼叫，或兴趣 judge 通过。比路由决定更早到达的图片最多等待 20 秒；请求有效期仍为 60 秒。
+- B 站分享卡片不再绕过兴趣闸门：卡片标题是一个兴趣信号，会立刻触发一次普通兴趣判定（触发原因 `share_card`），吐槽必须得到该判定的通过，2 分钟冷却只在吐槽真正发出后才开始计时。
 
 ### 联网搜索与 judge 服务
 
@@ -310,7 +329,9 @@ Hub 和 OneBot 两端 token 应一致。未配置 token 时，Webhook 仅信任 
 | `GEMINI_API_KEY` | 空 | 设置后 Bot 多一个 qq_search.ask_gemini 工具，看不懂的梗、谜语和双关可以请 Gemini 解读，也能把聊天里的图片或当前会话成员的 QQ 头像发给它看（说“问问哈基米”“问问Gemini”即可触发，每次共最多 4 张，内容会发送到 Google）；密钥只从环境读取 |
 | `CODEX_REMOTE_CONTACT_GEMINI_MODEL` | `gemini-3.8-flash` | ask_gemini 使用的 Gemini 模型 |
 
-仪表盘“智能行为”页或 QQ 主人命令 `/兴趣厂商 openrouter|deepseek|custom|codex|ollama` 可切换厂商，`/兴趣模型 模型ID` 可覆盖默认模型。密钥始终只从环境读取，不写入 `data/settings.json`。OpenRouter 使用严格 JSON Schema；DeepSeek 和自定义兼容服务使用 JSON Object 模式。`codex` 不需要 key：每次判断都是本机 Codex 登录上的一轮无工具、低思考强度任务（默认模型 `gpt-6-luna`），与回复共用 Codex 队列。`ollama` 同样不需要 key：调用本机 Ollama（默认模型 `gemma4:e4b-it-qat`，4-bit 量化，运行时约 4GB；16GB 内存的机器上非量化版约 10GB，会把 NapCat 挤进 swap），关闭思考（只有附带图片时用 `low` 短暂思考，否则小模型容易误读图片来源）并发送 `keep_alive: -1` 让模型常驻，单次判断只需几秒；使用前先 `ollama pull gemma4:e4b-it-qat`。可运行 `npm run ncc -- search-config` 初始化仓库环境文件。排障先看 `/api/maintenance` 和 `search` / `interest` 日志。
+仪表盘“智能行为”页或 QQ 主人命令 `/兴趣厂商 openrouter|deepseek|custom|codex|ollama` 可切换厂商，`/兴趣模型 模型ID` 可覆盖默认模型。判定模型按厂商分别记在 `qq.proactive.judge.modelsByProvider`：`/兴趣模型` 把模型记给当前厂商，之后用 `/兴趣厂商`、仪表盘或主人在线闲置切换厂商时，使用该厂商已保存的模型，而不是重置为默认。密钥始终只从环境读取，不写入 `data/settings.json`。OpenRouter 使用严格 JSON Schema；DeepSeek 和自定义兼容服务使用 JSON Object 模式。`codex` 不需要 key：每次判断都是本机 Codex 登录上的一轮无工具、低思考强度任务（默认模型 `gpt-6-luna`），与回复共用 Codex 队列。`ollama` 同样不需要 key：调用本机 Ollama（默认模型 `gemma4:e4b-it-qat`，4-bit 量化，运行时约 4GB；16GB 内存的机器上非量化版约 10GB，会把 NapCat 挤进 swap），关闭思考（只有附带图片时用 `low` 短暂思考，否则小模型容易误读图片来源）并发送 `keep_alive: -1` 让模型常驻，单次判断只需几秒；使用前先 `ollama pull gemma4:e4b-it-qat`。可运行 `npm run ncc -- search-config` 初始化仓库环境文件。排障先看 `/api/maintenance` 和 `search` / `interest` 日志。
+
+所有兴趣模型变更（主人在线闲置切换、`/兴趣厂商`、`/兴趣模型`、仪表盘）都走同一个切换器。Ollama 目标先预加载，成功后才提交，所以加载失败会保留之前可用的模型：QQ 命令回复警告，`POST /api/qq/bot-settings` 返回 502。较新的变更会取代仍在加载的旧变更（仪表盘返回 409）。之前的 Ollama 模型至少延迟 30 秒才卸载，让正在进行的判断跑完。目标、当前模型和最近一次加载错误在 `/api/state` 的 `qq.proactive.judgeModels` 下。`POST /api/qq/bot-settings` 接受 `judgeModelsByProvider`（厂商到模型 ID 的对象；空字符串把该厂商重置为默认），并返回 `judgeModelsByProvider` 与每个 `judgeProviders[].model`。兴趣判定日志记录的是该次判断实际使用的厂商/模型快照。
 
 ### 角色卡
 
