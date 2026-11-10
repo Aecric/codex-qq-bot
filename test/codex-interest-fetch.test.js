@@ -56,3 +56,24 @@ test("a failed turn becomes an HTTP error and an abort stops waiting", async () 
   controller.abort();
   await assert.rejects(pending, { name: "AbortError" });
 });
+
+test("the judge's abort signal reaches the Codex turn so it can be interrupted", async () => {
+  const controller = new AbortController();
+  let turnSignal = null;
+  const fetchImpl = createCodexInterestFetch({
+    runTurn: ({ signal }) => {
+      turnSignal = signal;
+      return new Promise((resolve, reject) => {
+        signal.addEventListener("abort", () => reject(Object.assign(new Error("interrupted"), { name: "AbortError" })), { once: true });
+      });
+    }
+  });
+  const pending = fetchImpl("codex://local", {
+    body: JSON.stringify({ messages: [{ role: "user", content: "x" }] }),
+    signal: controller.signal
+  });
+  assert.equal(turnSignal, controller.signal);
+  controller.abort();
+  await assert.rejects(pending, { name: "AbortError" });
+  assert.equal(turnSignal.aborted, true);
+});

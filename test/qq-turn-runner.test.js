@@ -6,6 +6,7 @@ import { runCodexAppServerTurn } from "../src/codex-app-server-turn.js";
 import { createQqCodexTurnRunner, selectQqAgentEngine } from "../src/infrastructure/codex/qq-turn-runner.js";
 import { runAgentToolCall } from "../src/infrastructure/agent/agent-tool-context.js";
 import { CODEX_LEAN_QQ_FEATURE_OVERRIDES } from "../src/infrastructure/codex/codex-lean-config.js";
+import { createConcurrencyLimiter } from "../src/concurrency-limiter.js";
 
 const claudeThreadId = "claude:11111111-2222-4333-8444-555555555555";
 
@@ -91,4 +92,56 @@ test("turn startup failures preserve the actual error and record model settings"
   assert.equal(errors.length, 1);
   assert.equal(errors[0].model, "test-model");
   assert.equal(state.maintenance.agent.lastOk, false);
+});
+
+function createSignalTestRunner({ limiter, getReplyScope = () => null }) {
+  const noop = () => null;
+  return createQqCodexTurnRunner({
+    limiter,
+    state: { ai: { model: "test-model", reasoningEffort: "low" }, maintenance: { codex: { quota: null }, agent: {} } },
+    codexPath: "/nonexistent/qq-agent-signal-test", activeChildren: new Set(),
+    stoppedGenerationIds: new Set(), getReplyScope,
+    createStoppedError: () => new Error("stopped"), trackGeneration: noop, attachSteering: noop,
+    clearGeneration: noop, logContext: noop, logger: { error: noop }
+  });
+}
+
+test("a caller signal reaches the turn queue even without a QQ reply scope", async () => {
+  const controller = new AbortController();
+  let queuedSignal;
+  const runner = createSignalTestRunner({
+    limiter: { run: (_operation, { signal } = {}) => { queuedSignal = signal; return Promise.resolve("queued"); } }
+  });
+  assert.equal(await runner("judge", { signal: controller.signal }), "queued");
+  assert.equal(queuedSignal, controller.signal);
+});
+
+test("a caller signal and a reply-scope signal are combined", async () => {
+  const caller = new AbortController();
+  const scope = new AbortController();
+  let queuedSignal;
+  const runner = createSignalTestRunner({
+    limiter: { run: (_operation, { signal } = {}) => { queuedSignal = signal; return Promise.resolve(null); } },
+    getReplyScope: () => ({ signal: scope.signal, cancelled: false })
+  });
+  await runner("reply", { signal: caller.signal, qqEvent: { groupId: "100001" } });
+  assert.equal(queuedSignal.aborted, false);
+  scope.abort();
+  assert.equal(queuedSignal.aborted, true);
+});
+
+test("an aborted judge turn leaves the queue and never starts", async () => {
+  const limiter = createConcurrencyLimiter(1);
+  let release;
+  const busy = limiter.run(() => new Promise((resolve) => { release = resolve; }));
+  const runner = createSignalTestRunner({ limiter });
+  const controller = new AbortController();
+  const queued = runner("judge", { cwd: "/tmp", timeout: 1000, signal: controller.signal });
+  controller.abort();
+  await assert.rejects(queued, (error) => {
+    assert.doesNotMatch(String(error.message), /ENOENT|spawn/i);
+    return true;
+  });
+  release();
+  await busy;
 });

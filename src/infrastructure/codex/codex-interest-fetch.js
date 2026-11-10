@@ -31,8 +31,11 @@ export function createCodexInterestFetch({ runTurn, defaultModel = "gpt-6-luna" 
     const prompt = formatInterestMessagesAsPrompt(body.messages);
     if (!prompt) return jsonResponse(400, { error: { message: "Local Codex judge received no messages" } });
     try {
+      // The signal reaches the turn itself, so a judge that gives up also
+      // interrupts (or dequeues) the Codex turn; abortable() still settles
+      // this call immediately even if the runner is slow to react.
       const content = await abortable(
-        runTurn({ prompt, model: String(body.model || defaultModel) }),
+        runTurn({ prompt, model: String(body.model || defaultModel), signal: init.signal }),
         init.signal
       );
       return jsonResponse(200, {
@@ -52,8 +55,8 @@ function jsonResponse(status, payload) {
   });
 }
 
-// The judge aborts on its own idle timeout; the Codex turn may still finish in
-// the background, but the judge stops waiting for it.
+// Settles as soon as the judge aborts; the turn receives the same signal and
+// is interrupted by the turn runner.
 function abortable(promise, signal) {
   if (!signal) return promise;
   if (signal.aborted) return Promise.reject(abortError());

@@ -13658,9 +13658,11 @@ const runSteerableQqCodexTurn = createQqCodexTurnRunner({
 // The "codex" interest provider: each judge call becomes one tool-free,
 // ephemeral turn on a small model at low effort, sharing the Codex queue.
 const codexInterestFetch = createCodexInterestFetch({
-  runTurn: async ({ prompt, model }) => {
+  runTurn: async ({ prompt, model, signal }) => {
     await ensureCodexReplyWorkspace();
+    if (signal?.aborted) throw Object.assign(new Error("The local Codex judge was aborted"), { name: "AbortError" });
     const result = await runSteerableQqCodexTurn(prompt, {
+      signal,
       cwd: codexTmpDir,
       taskType: CODEX_TASK_TYPES.QQ_CONTEXT_SUMMARY,
       timeout: getCodexTaskTimeoutMs(codexTaskTimeouts, CODEX_TASK_TYPES.QQ_CONTEXT_SUMMARY, "low"),
