@@ -323,6 +323,28 @@ test("ask_gemini is offered only when Gemini is configured and maps to the inter
   assert.equal(mapQqNativeToolToCommand("qq_search", "ask_gemini", { question: "“请进”\n是什么梗" }), "/问Gemini “请进” 是什么梗");
 });
 
+test("ask_gemini goes through the structured executor only when it carries images", async () => {
+  const seen = { structured: [], commands: [] };
+  const dispatcher = createQqNativeToolDispatcher({
+    event: { senderId: "1" },
+    executeCommand: async (command) => {
+      seen.commands.push(command);
+      return { ok: true, reply: "text answer" };
+    },
+    executeStructured: async (call) => {
+      seen.structured.push(call.arguments.image_selectors);
+      return { ok: true, reply: "image answer" };
+    }
+  });
+  const text = await dispatcher({ namespace: "qq_search", tool: "ask_gemini", arguments: { question: "梗" } });
+  const image = await dispatcher({ namespace: "qq_search", tool: "ask_gemini", arguments: { question: "看图", image_selectors: ["image-a"] } });
+  assert.equal(text.result, "text answer");
+  assert.equal(image.result, "image answer");
+  const avatar = await dispatcher({ namespace: "qq_search", tool: "ask_gemini", arguments: { question: "看头像", avatar_user_ids: ["123"] } });
+  assert.equal(avatar.result, "image answer");
+  assert.deepEqual(seen, { structured: [["image-a"], undefined], commands: ["/问Gemini 梗"] });
+});
+
 test("group chats never get the host command tool, even for the owner", () => {
   const runtimeTools = (specs) => specs.find((spec) => spec.name === "qq_runtime")?.tools.map((tool) => tool.name) || [];
   assert.ok(runtimeTools(buildQqNativeToolSpecs({ isOwner: true })).includes("host_command"));

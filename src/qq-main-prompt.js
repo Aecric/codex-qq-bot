@@ -214,7 +214,7 @@ export function formatQqMainToolGuide({
     "- qq_sticker：按情绪/场合/梗搜索、查看、标注、收藏表情包",
     "- qq_message：给消息贴表情回应、撤回自己刚发的消息",
     "- qq_social：拍一拍、点赞、好友/群申请、加群、QQ 空间、群管理",
-    `- qq_search：中文网页${canSearchImages ? "、网络图片与表情包" : ""}${canAskGemini ? "；ask_gemini 请 Gemini 帮忙解读看不懂的梗、谜语和双关" : ""}（最新资料优先用原生 Web Search）`,
+    `- qq_search：中文网页${canSearchImages ? "、网络图片与表情包" : ""}${canAskGemini ? "；ask_gemini 请 Gemini（外号哈基米）解读看不懂的梗、谜语和双关，也能传图片 selector 或群友 QQ 号（头像）让它看图；有人说“问问哈基米”“找哈基米看看”“问问Gemini”时用它，别说发不了图" : ""}（最新资料优先用原生 Web Search）`,
     "- qq_self：自己的心情、今天的作息和最近的内心OS",
     privileged ? "- qq_session.manage：列出、读取、切换其他 QQ 会话并在明确要求时发送" : null,
     privileged ? "- qq_runtime：qq_runtime.configure 调整 Hub 设置（AI任务 始终后台提交，返回编号只代表已提交）；qq_runtime.summarize 加载历史给本轮自己总结；qq_runtime.host_command 申请执行一条本机命令（只批准已验证主人）" : null,

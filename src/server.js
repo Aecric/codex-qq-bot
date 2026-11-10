@@ -482,9 +482,11 @@ import {
   collectQqImageMemoryCandidates,
   formatQqImageMemoryCandidates,
   getQqGroupRecentContextLimit,
-  snapshotQqContextImages
+  snapshotQqContextImages,
+  formatQqGeminiImageHint
 } from "./qq-enhancer/context-images.js";
 import { executeQqImageMemoryTool } from "./app/qq-image-memory-tool.js";
+import { executeQqGeminiImageTool } from "./app/qq-gemini-image-tool.js";
 import {
   createQqInterestVisionCapabilityCache,
   selectQqInterestJudgeImages
@@ -2066,6 +2068,7 @@ async function buildQqPendingSteeringInput(entries, generation) {
       "",
       aggregate.text,
       formatQqImageMemoryCandidates(getQqImageMemoryCandidates(parentEvent || aggregate)),
+      environmentConfig.geminiApiKey ? formatQqGeminiImageHint(aggregate.text, getQqImageMemoryCandidates(parentEvent || aggregate)) || null : null,
       parentEvent
         ? formatQqInboundFileCandidates(collectQqInboundFileCandidates(parentEvent), { maxBytes: qqFileMaxBytes })
         : formatQqInboundFileCandidates(collectQqInboundFileCandidates(aggregate), { maxBytes: qqFileMaxBytes }),
@@ -7642,6 +7645,28 @@ async function executeQqStructuredNativeTool(call, event, context = {}) {
   if (call?.namespace === "qq_search" && call?.tool === "images") {
     return executeQqWebImageNativeTool(call, context.rootEvent || event, context.replyScope);
   }
+  if (call?.namespace === "qq_search" && call?.tool === "ask_gemini") {
+    const rootEvent = context.rootEvent || event;
+    const replyScope = context.replyScope;
+    if (!replyScope || replyScope !== getActiveQqReplyScopeForEvent(rootEvent)) {
+      return { ok: false, error: "本轮任务已结束，不能读取图片。" };
+    }
+    return executeQqGeminiImageTool(call.arguments, {
+      candidates: getQqImageMemoryCandidates(rootEvent),
+      taskWorkspace: rootEvent.qqTaskWorkspace,
+      prepareImage: (image, options) => prepareSingleQqModelImage(image, { ...options, fetchOneBotImage }),
+      maxBytes: qqImageMaxBytes,
+      compressedMaxEdge: qqCompressedImageMaxEdge,
+      signal: replyScope.signal,
+      assertActive: () => assertQqReplyScopeActive(replyScope),
+      avatars: {
+        candidates: getQqAvatarCandidatesForEvent(rootEvent),
+        imageStore: qqMemoryImageStore,
+        ensureAvatar: (userId) => refreshQqPersonAvatar(userId)
+      },
+      ask: ({ question, images }) => runQqGeminiAsk({ question, images, event: rootEvent })
+    });
+  }
   if (call?.namespace === "qq_context" && call?.tool === "images") {
     const rootEvent = context.rootEvent || event;
     const replyScope = context.replyScope;
@@ -8980,19 +9005,25 @@ function getPendingQqStickerLabels(event) {
 async function executeQqBotGeminiCommand(command, event = null) {
   const question = String(command || "").replace(/^\/?问gemini\s*/i, "").trim();
   if (!question) return { ok: false, command, reply: "要问 Gemini 的内容为空。" };
+  const result = await runQqGeminiAsk({ question, event });
+  return result.ok
+    ? { ok: true, command, reply: `Gemini 的解读（仅供参考，用自己的话转述）：${result.answer}` }
+    : { ok: false, command, reply: `问 Gemini 失败：${result.reason}` };
+}
+
+async function runQqGeminiAsk({ question, images = [], event = null }) {
   const startedAt = Date.now();
-  const result = await askGemini({ apiKey: environmentConfig.geminiApiKey, model: environmentConfig.geminiModel, question });
+  const result = await askGemini({ apiKey: environmentConfig.geminiApiKey, model: environmentConfig.geminiModel, question, images });
   logger.info("QQ Gemini second opinion finished", {
     groupId: event?.groupId || null,
     senderId: event?.senderId || null,
     model: environmentConfig.geminiModel,
+    imageCount: images.length,
     outcome: result.ok ? "answered" : "failed",
     reason: result.ok ? null : result.reason,
     durationMs: Date.now() - startedAt
   }, "agent", event ? qqLogContext(event) : undefined);
-  return result.ok
-    ? { ok: true, command, reply: `Gemini 的解读（仅供参考，用自己的话转述）：${result.answer}` }
-    : { ok: false, command, reply: `问 Gemini 失败：${result.reason}` };
+  return result;
 }
 
 async function executeQqBotWebSearchCommand(command, event = null) {
@@ -10512,6 +10543,7 @@ async function buildModelReply(event, { replyScope = null } = {}) {
       hasAnyQqImageReference(event) && !shouldInspectImages ? "本条 QQ 消息或引用消息带了图片，但文本兴趣不足或未明确要求看图；Hub 已跳过视觉输入以节省 token。不要声称看过图片内容。" : null,
       shouldInspectImages ? `收到的 QQ 图片：${formatQqImageSummary(qqModelImages)}` : null,
       event.qqPrivateProactive ? null : formatQqImageMemoryCandidates(getQqImageMemoryCandidates(event)),
+      !event.qqPrivateProactive && environmentConfig.geminiApiKey ? formatQqGeminiImageHint(event.text, getQqImageMemoryCandidates(event)) || null : null,
       event.qqPrivateProactive ? null : formatQqAvatarFeatureContextForEvent(event) || null,
       imagePaths.length ? `可查看的本地图片数量：${imagePaths.length}` : null,
       event.qqAnimationVision?.length ? `动图信息：${event.qqAnimationVision.join("；")}。你可以自行决定要展开几个动图、每个抽几帧以及抽哪些位置；需要时用 qq_sticker 的 inspect（selector=当前N，description 填 20%,50%,80%、中段3帧或均匀5帧）。不要把同一动图的多帧误当成多张独立表情。` : null,
