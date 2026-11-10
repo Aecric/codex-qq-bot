@@ -25,6 +25,11 @@ const BOT_BEHAVIOR_TEXTS = {
   judgeActiveProvider: "#botIdleActiveProvider",
   judgeIdleProvider: "#botIdleIdleProvider"
 };
+// Per-provider judge models edited next to the idle-switch providers: draft/setting key -> [provider key, model control id].
+const BOT_PROVIDER_MODEL_CONTROLS = {
+  judgeActiveModel: ["judgeActiveProvider", "#botIdleActiveModel"],
+  judgeIdleModel: ["judgeIdleProvider", "#botIdleIdleModel"]
+};
 
 const translations = {
   zh: {
@@ -63,7 +68,7 @@ const translations = {
     proactiveGroups: "主动接话群", proactiveGroupsHint: "逗号分隔；留空表示所有白名单群。@ 和续聊不受影响。", proactiveGroupsPlaceholder: "所有白名单群", engagedWindow: "@ 后观察条数", engagedWindowHint: "回答 @ 后继续观察的真人消息数；需开启主动兴趣，0 关闭。", stickerMinChance: "表情包最低概率", stickerMinChanceHint: "闲聊回复配表情包的最低概率，0–1。",
     taskPleading: "求几次才干活", taskPleadingHint: "同一人 15 分钟内最多要求几次才执行任务；0 或 1 关闭。", sessionRotateHours: "会话轮换（小时）", sessionRotateHoursHint: "线程超过这么久后先总结记忆再换新线程；0 关闭。", sessionRotateReplies: "会话轮换（回复数）", sessionRotateRepliesHint: "线程累计回复达到后轮换，与小时数先到者为准；0 关闭。",
     quotaSaverBelow: "低于此剩余进入（%）", quotaSaverBelowHint: "5 小时窗口剩余低于它时改用省电模型和 low 思考，并换新线程；0 关闭。", quotaSaverResume: "回到此剩余退出（%）", quotaSaverResumeHint: "必须大于进入阈值；窗口重置时也会退出。", quotaSaverModel: "省电模型", quotaSaverModelHint: "下次进入省电模式时使用。",
-    idleSwitchFeature: "按闲置切换服务", idleSwitchHint: "仅 macOS：按主人是否在用电脑选择服务；开启后上方的模型服务由它接管。", idleAfter: "闲置阈值（秒）", idleAfterHint: "闲置这么久后切到闲置服务，60–86400。", idleActiveProvider: "使用中服务", idleActiveProviderHint: "主人在用电脑时使用，取该服务默认模型。", idleIdleProvider: "闲置时服务", idleIdleProviderHint: "电脑闲置时使用，取该服务默认模型。",
+    idleSwitchFeature: "按闲置切换服务", idleSwitchHint: "仅 macOS：按主人是否在用电脑选择服务；开启后上方的模型服务由它接管。", idleAfter: "闲置阈值（秒）", idleAfterHint: "闲置这么久后切到闲置服务，60–86400。", idleActiveProvider: "使用中服务", idleActiveProviderHint: "主人在用电脑时使用，模型见下方。", idleActiveModel: "使用中服务的模型", idleActiveModelHint: "按服务分别保存；留空用该服务默认模型。", idleIdleProvider: "闲置时服务", idleIdleProviderHint: "电脑闲置时使用，模型见下方。", idleIdleModel: "闲置时服务的模型", idleIdleModelHint: "备用服务（如本机 Ollama）的模型；加载失败会保留原模型。", diagJudgeLoadFailed: "兴趣模型加载失败，沿用 {value}",
     diagQuotaSaverActive: "省电模式：进行中", diagQuotaSaverIdle: "省电模式：待命", diagQuotaSaverOff: "省电模式：关闭", diagIdleSwitch: "自动切换：{active} / {idle}", diagEngagedGroups: "观察中的群：{value}", diagGeminiReady: "Gemini：{value}", diagGeminiMissing: "Gemini Key 未配置", diagOllama: "Ollama：{value}",
     characterCard: "角色卡", characterCardHint: "Bot 的身份和说话方式，每次回复都会带上，下一条回复起生效。世界观等资料放到知识库更省上下文。", characterCardPlaceholder: "# 角色卡", characterCardUpload: "上传文件", characterCardSave: "保存角色卡", characterCardSaved: "角色卡已保存", characterCardCount: "{chars} / {max} 字符", characterCardFile: "文件：{value}", characterCardTooLong: "角色卡超过 {max} 字符，请先精简", characterCardReplace: "用文件 {value} 替换编辑框里的内容？保存后才会生效。",
     knowledgeTemplate: "下载模板", knowledgeExport: "导出备份", knowledgeImport: "导入", knowledgeExported: "备份已导出", knowledgeExportedPartial: "备份已导出，但有 {value} 张配图因体积过大或无法读取而未包含", knowledgeImportTitle: "导入知识库", knowledgeImportFile: "文件", knowledgeImportDefaultKind: "单个文本文件的类型", knowledgeImportHint: "支持 ZIP 包和 .md、.txt 文件，不超过 32 MB。ZIP 包按 notes.md、slang.md 分类，写法见模板里的 README。", knowledgeImportSelectAll: "全选", knowledgeImportScope: "应用到", knowledgeImportScopeKeep: "保留备份里的范围", knowledgeImportScopeGlobal: "全局（所有群和私聊）", knowledgeImportScopeGroups: "指定的群", knowledgeImportExtraGroups: "其他群号", knowledgeImportExtraGroupsHint: "多个群号用逗号分隔", knowledgeImportConfirm: "导入所选",
@@ -151,7 +156,7 @@ const translations = {
     proactiveGroups: "Proactive groups", proactiveGroupsHint: "Comma separated; empty means every allowlisted group. Mentions and follow-ups are unaffected.", proactiveGroupsPlaceholder: "All allowlisted groups", engagedWindow: "Messages watched after @", engagedWindowHint: "Human messages watched after answering an @; needs proactive interest, 0 turns it off.", stickerMinChance: "Minimum sticker chance", stickerMinChanceHint: "Lowest chance a casual reply gets a sticker, 0–1.",
     taskPleading: "Asks before doing tasks", taskPleadingHint: "Most asks the same person must make within 15 minutes; 0 or 1 turns it off.", sessionRotateHours: "Session rotation (hours)", sessionRotateHoursHint: "Older threads save a summary, then start fresh; 0 turns it off.", sessionRotateReplies: "Session rotation (replies)", sessionRotateRepliesHint: "Rotates at this many replies, or the hour limit if sooner; 0 turns it off.",
     quotaSaverBelow: "Enter below remaining (%)", quotaSaverBelowHint: "Below this share of the 5-hour window, replies use the saver model at low effort in new threads; 0 turns it off.", quotaSaverResume: "Leave at remaining (%)", quotaSaverResumeHint: "Must be above the entry threshold; a window reset also leaves saver mode.", quotaSaverModel: "Saver model", quotaSaverModelHint: "Used the next time saver mode starts.",
-    idleSwitchFeature: "Switch provider when idle", idleSwitchHint: "macOS only: picks the provider by whether the owner is at the computer, and takes over the provider above.", idleAfter: "Idle threshold (seconds)", idleAfterHint: "Moves to the idle provider after this long, 60–86400.", idleActiveProvider: "Provider while in use", idleActiveProviderHint: "Used while the owner is at the computer, with its default model.", idleIdleProvider: "Provider when idle", idleIdleProviderHint: "Used while the computer is idle, with its default model.",
+    idleSwitchFeature: "Switch provider when idle", idleSwitchHint: "macOS only: picks the provider by whether the owner is at the computer, and takes over the provider above.", idleAfter: "Idle threshold (seconds)", idleAfterHint: "Moves to the idle provider after this long, 60–86400.", idleActiveProvider: "Provider while in use", idleActiveProviderHint: "Used while the owner is at the computer; its model is set below.", idleActiveModel: "Model for the in-use provider", idleActiveModelHint: "Saved per provider; leave empty for that provider's default model.", idleIdleProvider: "Provider when idle", idleIdleProviderHint: "Used while the computer is idle; its model is set below.", idleIdleModel: "Model for the idle provider", idleIdleModelHint: "Model of the backup provider (for example local Ollama); a failed load keeps the previous model.", diagJudgeLoadFailed: "Interest model failed to load; keeping {value}",
     diagQuotaSaverActive: "Saver mode: active", diagQuotaSaverIdle: "Saver mode: standing by", diagQuotaSaverOff: "Saver mode: off", diagIdleSwitch: "Auto switch: {active} / {idle}", diagEngagedGroups: "Groups watched: {value}", diagGeminiReady: "Gemini: {value}", diagGeminiMissing: "Gemini key missing", diagOllama: "Ollama: {value}",
     characterCard: "Character card", characterCardHint: "The Bot's identity and voice. Sent with every reply and used from the next reply on. Lore costs less context in the knowledge base.", characterCardPlaceholder: "# Character card", characterCardUpload: "Upload file", characterCardSave: "Save card", characterCardSaved: "Character card saved", characterCardCount: "{chars} / {max} characters", characterCardFile: "File: {value}", characterCardTooLong: "The card is over {max} characters; shorten it first", characterCardReplace: "Replace the editor's text with {value}? Nothing changes until you save.",
     knowledgeTemplate: "Template", knowledgeExport: "Export backup", knowledgeImport: "Import", knowledgeExported: "Backup exported", knowledgeExportedPartial: "Backup exported, but {value} images were too large or unreadable and were left out", knowledgeImportTitle: "Import knowledge", knowledgeImportFile: "File", knowledgeImportDefaultKind: "Type for a single text file", knowledgeImportHint: "ZIP packages and .md or .txt files up to 32 MB. ZIP packages sort by notes.md and slang.md; the template's README shows the format.", knowledgeImportSelectAll: "Select all", knowledgeImportScope: "Apply to", knowledgeImportScopeKeep: "Keep the backup's scopes", knowledgeImportScopeGlobal: "Global (all groups and private chats)", knowledgeImportScopeGroups: "Chosen groups", knowledgeImportExtraGroups: "Other group numbers", knowledgeImportExtraGroupsHint: "Separate group numbers with commas", knowledgeImportConfirm: "Import selected",
@@ -338,8 +343,39 @@ function normalizeBotSettingsDraft(value) {
     proactiveGroupIds: boundedUiText(value.proactiveGroupIds, 4000),
     ...Object.fromEntries(Object.keys(BOT_BEHAVIOR_TOGGLES).map((key) => [key, Boolean(value[key])])),
     ...Object.fromEntries(Object.keys(BOT_BEHAVIOR_NUMBERS).map((key) => [key, boundedUiText(value[key], 8)])),
-    ...Object.fromEntries(Object.keys(BOT_BEHAVIOR_TEXTS).map((key) => [key, boundedUiText(value[key], 200)]))
+    ...Object.fromEntries(Object.keys(BOT_BEHAVIOR_TEXTS).map((key) => [key, boundedUiText(value[key], 200)])),
+    // A draft saved before these controls existed has no entry; the saved model is shown instead.
+    ...Object.fromEntries(Object.keys(BOT_PROVIDER_MODEL_CONTROLS).filter((key) => typeof value[key] === "string").map((key) => [key, boundedUiText(value[key], 200)]))
   };
+}
+
+// The model saved for a provider (its override, else its default).
+function savedJudgeModel(settings, providerId) {
+  const provider = (settings?.judgeProviders || []).find((item) => item.id === providerId);
+  return provider?.model || provider?.defaultModel || "";
+}
+
+function writeBotProviderModelControls(values) {
+  for (const [key, [providerKey, selector]] of Object.entries(BOT_PROVIDER_MODEL_CONTROLS)) {
+    $(selector).value = typeof values[key] === "string"
+      ? values[key]
+      : savedJudgeModel(app.state?.qq?.botSettings, $(BOT_BEHAVIOR_TEXTS[providerKey]).value);
+  }
+}
+
+// Only models that differ from what the Hub has saved are sent, so a form that
+// was opened earlier does not overwrite a model changed elsewhere meanwhile.
+function collectJudgeModelsByProvider() {
+  const settings = app.state?.qq?.botSettings;
+  const changes = {};
+  for (const [, [providerKey, selector]] of Object.entries(BOT_PROVIDER_MODEL_CONTROLS)) {
+    const providerId = $(BOT_BEHAVIOR_TEXTS[providerKey]).value;
+    const provider = (settings?.judgeProviders || []).find((item) => item.id === providerId);
+    if (!provider) continue;
+    const model = $(selector).value.trim();
+    if ((model || provider.defaultModel) !== savedJudgeModel(settings, providerId)) changes[providerId] = model;
+  }
+  return changes;
 }
 
 function readBotBehaviorControls(readNumber) {
@@ -381,7 +417,8 @@ function collectBotSettingsDraft() {
     judgeModel: $("#botJudgeModel").value,
     judgeTimeoutMs: $("#botJudgeTimeout").value,
     judgeMaxRecentMessages: $("#botJudgeRecent").value,
-    ...readBotBehaviorControls((value) => value)
+    ...readBotBehaviorControls((value) => value),
+    ...Object.fromEntries(Object.entries(BOT_PROVIDER_MODEL_CONTROLS).map(([key, [, selector]]) => [key, $(selector).value]))
   };
 }
 
@@ -398,6 +435,7 @@ function applyBotSettingsDraft(draft) {
   $("#botJudgeTimeout").value = draft.judgeTimeoutMs;
   $("#botJudgeRecent").value = draft.judgeMaxRecentMessages;
   writeBotBehaviorControls(draft);
+  writeBotProviderModelControls(draft);
 }
 
 function readLogFilters() {
@@ -1351,6 +1389,8 @@ function renderBotControls() {
     $("#botJudgeTimeout").value = settings.judgeTimeoutMs;
     $("#botJudgeRecent").value = settings.judgeMaxRecentMessages;
     writeBotBehaviorControls(settings);
+    writeBotProviderModelControls(Object.fromEntries(Object.entries(BOT_PROVIDER_MODEL_CONTROLS)
+      .map(([key, [providerKey]]) => [key, savedJudgeModel(settings, settings[providerKey])])));
   }
   $("#botProactiveGroups").placeholder = t("proactiveGroupsPlaceholder");
   // Locked controls are not submitted, so they always show the live provider.
@@ -1367,6 +1407,7 @@ function renderBotControls() {
   const engine = getEngineInfo();
   const runtime = app.state?.qq?.botRuntime || {};
   const saverEnabled = Number(settings.quotaSaverBelow) > 0;
+  const judgeLoad = app.state?.qq?.proactive?.judgeModels?.runtime;
   const usesOllama = settings.judgeProvider === "ollama"
     || (settings.judgeIdleSwitchEnabled && [settings.judgeActiveProvider, settings.judgeIdleProvider].includes("ollama"));
   setHtml($("#botDiagnostics"), [
@@ -1379,6 +1420,7 @@ function renderBotControls() {
     [t("diagPendingReplies", { value: pendingReplies }), pendingReplies ? "warn" : ""],
     [t(runtime.quotaSaverActive ? "diagQuotaSaverActive" : saverEnabled ? "diagQuotaSaverIdle" : "diagQuotaSaverOff"), runtime.quotaSaverActive ? "warn" : ""],
     ...(settings.judgeIdleSwitchEnabled ? [[t("diagIdleSwitch", { active: settings.judgeActiveProvider, idle: settings.judgeIdleProvider }), ""]] : []),
+    ...(judgeLoad?.phase === "failed" ? [[t("diagJudgeLoadFailed", { value: `${judgeLoad.activeProvider || "-"}/${judgeLoad.activeModel || "-"}` }), "warn"]] : []),
     ...(Number(settings.engagedWindowMessages) > 0 ? [[t("diagEngagedGroups", { value: Number(runtime.engagedGroups) || 0 }), ""]] : []),
     [runtime.geminiConfigured ? t("diagGeminiReady", { value: runtime.geminiModel || t("unknown") }) : t("diagGeminiMissing"), runtime.geminiConfigured ? "ok" : ""],
     ...(usesOllama && runtime.ollamaBaseUrl ? [[t("diagOllama", { value: runtime.ollamaBaseUrl }), ""]] : [])
@@ -1387,6 +1429,7 @@ function renderBotControls() {
 
 function collectBotSettings() {
   const idleSwitchOn = $("#botIdleSwitchToggle").checked;
+  const modelsByProvider = collectJudgeModelsByProvider();
   return {
     enhancerEnabled: $("#botEnhancerToggle").checked,
     webLookupEnabled: $("#botWebLookupToggle").checked,
@@ -1398,6 +1441,7 @@ function collectBotSettings() {
     ...(idleSwitchOn ? {} : { judgeProvider: $("#botJudgeProvider").value, judgeModel: $("#botJudgeModel").value.trim() }),
     judgeTimeoutMs: Number($("#botJudgeTimeout").value),
     judgeMaxRecentMessages: Number($("#botJudgeRecent").value),
+    ...(Object.keys(modelsByProvider).length ? { judgeModelsByProvider: modelsByProvider } : {}),
     ...readBotBehaviorControls(Number)
   };
 }
@@ -3021,9 +3065,16 @@ $("#botSettingsForm").addEventListener("input", markBotSettingsDirty);
 $("#botJudgeProvider").addEventListener("change", (event) => {
   const providers = app.state?.qq?.botSettings?.judgeProviders || [];
   const selected = providers.find((provider) => provider.id === event.target.value);
-  if (selected?.defaultModel) $("#botJudgeModel").value = selected.defaultModel;
+  // Switching provider brings back the model saved for it, not a reset to the default.
+  if (selected?.model || selected?.defaultModel) $("#botJudgeModel").value = selected.model || selected.defaultModel;
   markBotSettingsDirty();
 });
+for (const [, [providerKey, selector]] of Object.entries(BOT_PROVIDER_MODEL_CONTROLS)) {
+  $(BOT_BEHAVIOR_TEXTS[providerKey]).addEventListener("change", (event) => {
+    $(selector).value = savedJudgeModel(app.state?.qq?.botSettings, event.target.value);
+    markBotSettingsDirty();
+  });
+}
 $("#botSettingsForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   await saveBotSettings(event.submitter);

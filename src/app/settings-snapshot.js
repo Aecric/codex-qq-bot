@@ -42,6 +42,7 @@ export function createSettingsSnapshot({
           enabled: state.qq.proactive.judge.enabled,
           provider: state.qq.proactive.judge.provider,
           model: state.qq.proactive.judge.model,
+          modelsByProvider: state.qq.proactive.judge.modelsByProvider || {},
           baseUrl: state.qq.proactive.judge.baseUrl,
           timeoutMs: state.qq.proactive.judge.timeoutMs,
           minInterest: state.qq.proactive.judge.minInterest,

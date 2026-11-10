@@ -840,6 +840,57 @@ test("persona keyword immediately triggers one contextual judge with all interes
   assert.equal(input.recentMessages.length, 2);
 });
 
+test("a share card earns an immediate judge even when the message interval is far away", async () => {
+  const shareEvent = { ...event, text: "[哔哩哔哩分享] 这个视频值得一看" };
+  const interestSignals = { shareCardTitle: "【教程】一小时学会 Node" };
+
+  const waitingState = proactiveState(1500, { judgeEveryMessages: 50, judgeEveryMinutes: 5 });
+  const waiting = await shouldProactivelyReplyToQq(shareEvent, waitingState, {
+    openRouterApiKey: "configured-for-test",
+    fetch: async () => assert.fail("a plain first message must wait for the message interval")
+  });
+  assert.equal(waiting.ok, false);
+  assert.equal(waiting.reason, "waiting for proactive judge message interval");
+  assert.equal(waiting.messageCount, 1);
+
+  const emptySignals = await shouldProactivelyReplyToQq(shareEvent, proactiveState(1500, { judgeEveryMessages: 50 }), {
+    openRouterApiKey: "configured-for-test",
+    interestSignals: { shareCardTitle: "" },
+    fetch: async () => assert.fail("an empty share card title is not a signal")
+  });
+  assert.equal(emptySignals.reason, "waiting for proactive judge message interval");
+
+  const state = proactiveState(1500, { judgeEveryMessages: 50, judgeEveryMinutes: 5 });
+  let fetchCount = 0;
+  const result = await shouldProactivelyReplyToQq(shareEvent, state, {
+    openRouterApiKey: "configured-for-test",
+    interestSignals,
+    fetch: async () => {
+      fetchCount += 1;
+      return jsonJudgeResponse({ shouldReply: true, interest: 80 });
+    }
+  });
+  assert.equal(fetchCount, 1);
+  assert.equal(result.ok, true);
+  assert.equal(result.triggerReason, "share_card");
+  assert.equal(result.consumedMessageCount, 1);
+  assert.deepEqual(result.interestSignals, interestSignals);
+
+  const declinedState = proactiveState(1500, { judgeEveryMessages: 50, judgeEveryMinutes: 5 });
+  let declinedFetches = 0;
+  const declined = await shouldProactivelyReplyToQq(shareEvent, declinedState, {
+    openRouterApiKey: "configured-for-test",
+    interestSignals,
+    fetch: async () => {
+      declinedFetches += 1;
+      return jsonJudgeResponse({ shouldReply: false, interest: 5 });
+    }
+  });
+  assert.equal(declinedFetches, 1, "the share card reaches the judge");
+  assert.equal(declined.ok, false, "but the reply still needs the model's approval");
+  assert.equal(declined.triggerReason, "share_card");
+});
+
 test("messages arriving during a judge stay in the next cycle", async () => {
   const state = proactiveState(1500, { judgeEveryMessages: 1, judgeEveryMinutes: 5 });
   let releaseJudge;

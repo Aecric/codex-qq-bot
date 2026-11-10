@@ -102,6 +102,9 @@ subsystems belong in focused modules.
 | Per-command host permission requests | `src/app/qq-host-command.js` |
 | Two-model proactive approval | `src/qq-proactive-pipeline.js` |
 | Ordinary interest cycle state | `src/qq-proactive-cycle-state.js` |
+| Nickname addressing (alias judge, rollout modes, counters) | `src/qq-addressing.js` |
+| Pending image requests | `src/qq-pending-image-request.js` |
+| Per-provider interest model and its switcher | `src/qq-interest-model-selection.js` |
 | Follow-up fusion | `src/qq-reply-steering.js` |
 | App Server turn execution | `src/infrastructure/codex/` and `src/codex-app-server-turn.js` |
 | Claude Code turn execution, child env | `src/infrastructure/claude/` |
@@ -156,6 +159,25 @@ refactor with a behavior change.
 - Ordinary group messages are mention/reply driven unless a recognized command
   or the proactive-interest path authorizes a turn. Private messages use the
   normal reply path.
+- Routing is DIRECT (real @Bot, reply to the Bot, private, poke), alias judge,
+  JOIN (ordinary interest approval) or SILENT. A configured nickname in plain
+  group text is only a candidate: `src/qq-addressing.js` runs a structured
+  alias-address judge (`bot|other|unclear` with fixed reason codes) and only
+  `bot` takes the direct route; `other`, `unclear`, timeout and error stay
+  silent and are not re-judged by the ordinary interest gate. A judged alias
+  call never opens the owner file/image task entry or grants extra permission.
+  Without a usable interest model a deterministic vocative heuristic is used.
+  `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING=judge|shadow|legacy`, optional
+  `..._ALIAS_ROUTING_GROUPS` (only those groups use the mode, others stay
+  legacy) and `..._ALIAS_JUDGE_TIMEOUT_MS` (default 5000) control rollout:
+  shadow, then one group, then all groups; `legacy` is the rollback. Logs and
+  counters (`addressing.alias_judge`, `/api/state` `qq.proactive.addressing`)
+  never contain message text.
+- A pending image request ("look at this picture" then a picture from the same
+  sender) only counts when that text message was itself routed to the Bot; a
+  picture arriving first waits up to 20 s for the decision. A Bilibili share
+  card is an interest signal for the ordinary judge, never a bypass, and its
+  cooldown starts only when a roast is delivered.
 - One scope has one lifecycle from routing through delivery and cleanup. New
   Bot-triggering messages during generation enter the quiet-window fusion path;
   prefer steering, then interrupt/restart when steering cannot accept them.
@@ -296,6 +318,17 @@ refactor with a behavior change.
   back to the previous check time.
   A decline, provider failure, invalid structure, missing credential, or missing
   two-model approval never starts visible proactive chat.
+- The interest-judge model is remembered per provider
+  (`qq.proactive.judge.modelsByProvider`; env
+  `CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_MODELS="ollama=qwen3.5:4b"`).
+  Provider changes (owner-presence idle switch, `/兴趣厂商`, dashboard) use the
+  target provider's saved model; `/兴趣模型` records the model for the current
+  provider. Every change goes through one switcher: an Ollama target is
+  preloaded first and committed only on success (failure keeps the previous
+  model; dashboard 502, QQ warning), a newer change supersedes one still
+  loading (dashboard 409), and the previous Ollama model is unloaded only after
+  a delay of at least 30 s. Status is `qq.proactive.judgeModels` in
+  `/api/state`; `POST /api/qq/bot-settings` accepts `judgeModelsByProvider`.
 - Interest-model output must not contain a reply draft or style instructions.
   Invalid structure gets at most the documented format retry; transport failures
   and rate limits are not blindly retried.
@@ -306,7 +339,7 @@ refactor with a behavior change.
   confidence/evidence, boundaries, and knowledge-title references;
   deterministic fallback must not manufacture slang meaning.
 - Keep these paths observable through structured operations:
-  `interest.follow_up_batch`, `learning.language_statistics`,
+  `interest.follow_up_batch`, `addressing.alias_judge`, `learning.language_statistics`,
   `learning.style_review`, `memory.scope_summary`,
   `memory.knowledge_update`, `memory.person_promotion`,
   `memory.avatar_refresh`, `memory.avatar_features`,

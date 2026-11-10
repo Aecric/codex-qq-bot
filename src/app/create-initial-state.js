@@ -77,6 +77,7 @@ export function createInitialState({
           enabled: config.qqProactiveJudgeEnabled,
           provider: interestModel.provider,
           model: config.qqProactiveJudgeModel,
+          modelsByProvider: { ...(config.qqProactiveJudgeModelsByProvider || {}) },
           baseUrl: interestModel.baseUrl,
           timeoutMs: config.qqProactiveJudgeTimeoutMs,
           minInterest: config.qqProactiveJudgeMinInterest,

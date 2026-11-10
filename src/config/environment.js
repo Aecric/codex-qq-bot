@@ -7,6 +7,8 @@ import {
   normalizeInterestModelProvider
 } from "../interest-model-provider.js";
 import { normalizeQqInterestVisionMode } from "../qq-enhancer/interest-vision.js";
+import { normalizeQqAliasRoutingMode } from "../qq-addressing.js";
+import { parseQqJudgeModelsEnv } from "../qq-interest-model-selection.js";
 
 export function createEnvironmentConfig(env = process.env) {
   const oneBotMaxConcurrency = boundedInteger(
@@ -230,6 +232,26 @@ export function createEnvironmentConfig(env = process.env) {
     qqProactiveJudgeProvider,
     defaultQqProactiveJudgeModel,
     qqProactiveJudgeModel: env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_MODEL || defaultQqProactiveJudgeModel,
+    // Per-provider judge model overrides, e.g. "ollama=qwen3.5:4b". The
+    // single-model variable above still applies to the configured provider.
+    qqProactiveJudgeModelsByProvider: {
+      ...parseQqJudgeModelsEnv(env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_MODELS),
+      ...(env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_MODEL
+        ? parseQqJudgeModelsEnv(`${qqProactiveJudgeProvider}=${env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_MODEL}`)
+        : {})
+    },
+    // How a nickname in plain text (no real @ or reply) is routed: "judge"
+    // asks the addressing judge, "shadow" keeps the legacy direct route and
+    // only logs the judge's verdict, "legacy" is the old substring match. With
+    // a group list only those groups use the mode; others stay legacy.
+    qqAliasRoutingMode: normalizeQqAliasRoutingMode(env.CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING),
+    qqAliasRoutingGroups: String(env.CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING_GROUPS || "")
+      .split(/[,\s]+/).map((value) => value.trim()).filter(Boolean),
+    qqAliasJudgeTimeoutMs: boundedInteger(env.CODEX_REMOTE_CONTACT_QQ_ALIAS_JUDGE_TIMEOUT_MS, {
+      defaultValue: 5_000,
+      min: 1_000,
+      max: 20_000
+    }),
     qqProactiveJudgeTimeoutMs: numberOrDefault(env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_TIMEOUT_MS, 6_500),
     qqProactiveJudgeVision: normalizeQqInterestVisionMode(env.CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_VISION),
     // While the owner uses the computer the judge runs on the active provider;

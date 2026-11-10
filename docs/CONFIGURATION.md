@@ -101,6 +101,7 @@ Minimal configuration:
 | `qq.enhancer.enabled` | QQ media, style and interest enhancements |
 | `qq.webLookup.enabled` | Runtime QQ web-lookup switch, persistently editable from the dashboard |
 | `qq.proactive.*` | Ordinary message/minute interest triggers and judge policy |
+| `qq.proactive.judge.modelsByProvider` | Interest-judge model saved per provider (provider to model id, for example `{"ollama":"qwen3.5:4b"}`); a provider without an entry uses its default model. Older settings migrate on first load: the saved `model` is assigned to the provider it was saved with |
 | `qq.commandPermissions` | Public and user-specific non-owner command access |
 | `qq.codexSession.defaultMode` | Default `auto`, `persistent`, or `temporary` mode for scopes without an override |
 | `qq.codexSession.scopes` | Per-group or `private:QQ-id` mode overrides; thread IDs are not stored in settings |
@@ -264,15 +265,16 @@ Use the same token on both sides. Without one, the webhook trusts only requests 
 | `..._JUDGE_EVERY_MESSAGES` | `20` | Ordinary unmentioned message threshold, 1–1000 |
 | `..._JUDGE_EVERY_MINUTES` | `5` | Minute threshold for a non-empty cycle; `0` disables this branch |
 | `..._JUDGE_PROVIDER` | `openrouter` | Interest provider: `openrouter`, `deepseek`, `custom`, `codex`, or `ollama` |
-| `..._JUDGE_MODEL` | provider-specific | `openrouter/free` for OpenRouter; `deepseek-v4-flash` for DeepSeek |
+| `..._JUDGE_MODEL` | provider-specific | `openrouter/free` for OpenRouter; `deepseek-v4-flash` for DeepSeek. Applies to the configured `..._JUDGE_PROVIDER` only |
+| `..._JUDGE_MODELS` | empty | Per-provider models as `provider=model` pairs separated by commas, for example `ollama=qwen3.5:4b,codex=gpt-6-luna`. These seed `qq.proactive.judge.modelsByProvider`; entries already saved in `data/settings.json` win, and `..._JUDGE_MODEL` still overrides the configured provider |
 | `..._JUDGE_API_KEY` | empty | Credential for the `custom` provider |
 | `..._JUDGE_BASE_URL` | empty | OpenAI-compatible API root for the `custom` provider |
 | `..._JUDGE_TIMEOUT_MS` | `6500` | Streaming idle timeout |
 | `..._JUDGE_VISION` | `auto` | Whether the ordinary interest gate also receives up to two small JPEG previews of pictures in the judged messages: `auto` tries once per provider/model and falls back to text-only (remembered until restart) when the provider rejects image input, `on` always tries, `off` never sends pictures. Pictures go to the configured third-party interest provider |
 | `..._JUDGE_IDLE_SWITCH` | off | `1` lets owner presence pick the interest provider on macOS: while keyboard or mouse input is recent (under 30 s) the judge uses the active provider and the local model is unloaded; after the idle threshold the local model is loaded first and the judge moves to the idle provider. Quota saver mode pins the idle provider. While on, this switch owns the provider choice |
 | `..._JUDGE_IDLE_AFTER_SECONDS` | `300` | Idle seconds before the idle provider takes over (60–86400) |
-| `..._JUDGE_ACTIVE_PROVIDER` | `codex` | Provider while the owner uses the computer; its default model is used |
-| `..._JUDGE_IDLE_PROVIDER` | `ollama` | Provider while the computer is idle; its default model is used |
+| `..._JUDGE_ACTIVE_PROVIDER` | `codex` | Provider while the owner uses the computer; its saved per-provider model is used, else its default |
+| `..._JUDGE_IDLE_PROVIDER` | `ollama` | Provider while the computer is idle; its saved per-provider model is used (the backup model, for example `ollama=qwen3.5:4b`), else its default |
 | `CODEX_REMOTE_CONTACT_QQ_IMAGE_MAX_BYTES` | `20971520` | QQ image limit, 20 MiB by default |
 | `CODEX_REMOTE_CONTACT_QQ_COMPRESSED_IMAGE_MAX_EDGE` | `1600` | Compressed inspection's longest edge, bounded 256–4096 px; automatic startup selects 1280/1600/2048 according to Hub memory |
 | `CODEX_REMOTE_CONTACT_QQ_FILE_MAX_BYTES` | `52428800` | Per-file limit for model-selected inbound QQ downloads; bounded to 1 MiB–1 GiB |
@@ -288,6 +290,23 @@ Use the same token on both sides. Without one, the webhook trusts only requests 
 The main model decides from the full context whether a turn is casual chat or a substantive deliverable. Casual replies still follow the learned group rhythm; problem solving, proofs, calculations, code, writing, translation, summaries, and short continuations of those tasks have no fixed response length and should be as long as correct completion requires. Delivery no longer hard-cuts normal model output at 900 characters, and the casual length hint never removes sentences from a reply. Any bubble above the per-message safety limit is split into ordered QQ messages at paragraph or sentence boundaries, with hard cuts used only for unbroken text. If the configured per-reply bubble ceiling is exceeded, the last sent bubble explicitly reports truncation instead of risking one oversized OneBot send.
 
 Self-persona thresholds use `CODEX_REMOTE_CONTACT_QQ_SELF_PERSONA_*`; account sticker settings use `CODEX_REMOTE_CONTACT_QQ_ACCOUNT_STICKER_*`. Consult `src/config/environment.js` for every exact name, default and bound.
+
+### Nickname addressing
+
+A real OneBot @Bot, a reply to the Bot, a private chat and a poke are direct triggers, as before. A nickname or alias from `branding.assistantMentions` (initial value `CODEX_REMOTE_CONTACT_ASSISTANT_MENTIONS`, comma-separated) appearing in plain group text is only a candidate: a small structured alias-address judge decides `bot`, `other` or `unclear` with a fixed reason code. Only `bot` takes the direct reply route; `other`, `unclear`, a timeout or an error stays silent, and the message is not then sent to the ordinary interest judge. A judged alias call answers normally but does not open the owner file/picture task entry and grants no permission beyond a real @.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING` | `judge` | `judge` asks the alias-address judge; `shadow` keeps the old substring direct route and only logs what the judge would decide (no extra QQ messages); `legacy` is the old substring behavior |
+| `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING_GROUPS` | empty | Comma-separated group IDs for a one-group rollout: when set, only these groups use the mode above and every other group stays `legacy`; empty applies the mode to every group |
+| `CODEX_REMOTE_CONTACT_QQ_ALIAS_JUDGE_TIMEOUT_MS` | `5000` | Total deadline of one alias-address judgment, bounded 1000–20000 |
+
+- The judge reuses the interest-model provider and model. If no interest model is usable (judge disabled or no key), a deterministic vocative heuristic is used instead: the name at the start of the message followed by punctuation or 你/帮我/帮忙/快/在吗/在不在/来, or the name at the end after a comma or space.
+- Duplicate events for the same group message ID are judged once. Inside an engaged watch window an alias candidate takes the window slot instead of a second ordinary judgment.
+- Group history keeps text aliases (only protocol markers such as CQ codes are stripped), so the judges can see the nickname.
+- The `QQ alias address judged` log (operation `addressing.alias_judge`) records only the mode, outcome, target, reason code, provider/model, prompt version and timings, never message text or raw model output. Aggregated counters and P50/P95 latency are exposed in `/api/state` under `qq.proactive.addressing`.
+- Pending picture requests ("帮我看看图" followed by a picture from the same sender) now only trigger when that text message itself was routed to the Bot: a real @, a judged alias call or an approved interest decision. A picture that arrives before the routing decision waits up to 20 seconds for it; the request stays valid for 60 seconds.
+- A Bilibili share card no longer bypasses the interest gate: the card title is an interest signal that triggers an ordinary interest judgment immediately (trigger reason `share_card`), the roast needs that judgment's approval, and its 2-minute cooldown starts only when a roast is delivered.
 
 ### Web lookup and judge provider
 
@@ -308,7 +327,9 @@ Self-persona thresholds use `CODEX_REMOTE_CONTACT_QQ_SELF_PERSONA_*`; account st
 | `GEMINI_API_KEY` | empty | Adds the qq_search.ask_gemini tool so the Bot can ask Gemini to decode riddles, puns and memes it does not get, and can send it chat pictures or the QQ avatars of people in the current conversation (triggered by saying 问问哈基米 or 问问Gemini, up to 4 in total per call; they are sent to Google); the key is read from the environment only |
 | `CODEX_REMOTE_CONTACT_GEMINI_MODEL` | `gemini-3.8-flash` | Gemini model used by ask_gemini |
 
-Switch providers from Intelligence in the dashboard or with the owner command `/兴趣厂商 openrouter|deepseek|custom|codex|ollama`; `/兴趣模型 model-id` overrides the provider default. Credentials remain environment-only and are never persisted to `data/settings.json`. OpenRouter uses strict JSON Schema, while DeepSeek and custom compatible services use JSON Object mode. `codex` needs no key: each judgment is a tool-free, low-effort turn on the local Codex login (default model `gpt-6-luna`) that shares the Codex queue with replies. `ollama` needs no key either: it calls the local Ollama daemon (default model `gemma4:e4b-it-qat`, a 4-bit build that holds about 4GB; the unquantized build holds about 10GB and pushes NapCat into swap on a 16GB machine) with thinking turned off (a short `low` pass only when pictures are attached, which a small model otherwise misreads) and `keep_alive: -1`, so the model stays loaded and each judgment returns in a few seconds; pull the model first with `ollama pull gemma4:e4b-it-qat`. Run `npm run ncc -- search-config` to initialize the repository environment. Diagnose `/api/maintenance` and the `search` / `interest` logs before editing prompts.
+Switch providers from Intelligence in the dashboard or with the owner command `/兴趣厂商 openrouter|deepseek|custom|codex|ollama`; `/兴趣模型 model-id` overrides the provider default. The judge model is remembered per provider in `qq.proactive.judge.modelsByProvider`: `/兴趣模型` records the model for the current provider, and switching provider with `/兴趣厂商`, the dashboard or the owner-presence idle switch uses that provider's saved model instead of resetting to its default. Credentials remain environment-only and are never persisted to `data/settings.json`. OpenRouter uses strict JSON Schema, while DeepSeek and custom compatible services use JSON Object mode. `codex` needs no key: each judgment is a tool-free, low-effort turn on the local Codex login (default model `gpt-6-luna`) that shares the Codex queue with replies. `ollama` needs no key either: it calls the local Ollama daemon (default model `gemma4:e4b-it-qat`, a 4-bit build that holds about 4GB; the unquantized build holds about 10GB and pushes NapCat into swap on a 16GB machine) with thinking turned off (a short `low` pass only when pictures are attached, which a small model otherwise misreads) and `keep_alive: -1`, so the model stays loaded and each judgment returns in a few seconds; pull the model first with `ollama pull gemma4:e4b-it-qat`. Run `npm run ncc -- search-config` to initialize the repository environment. Diagnose `/api/maintenance` and the `search` / `interest` logs before editing prompts.
+
+Every interest-model change (owner-presence idle switch, `/兴趣厂商`, `/兴趣模型`, the dashboard) goes through one switcher. An Ollama target is preloaded first and committed only if that succeeds, so a failed load keeps the previous working model: the QQ command replies with a warning and `POST /api/qq/bot-settings` returns 502. A newer change supersedes one that is still loading (the dashboard returns 409). The previous Ollama model is unloaded only after a delay of at least 30 seconds, so in-flight judgments finish. The target, active model and last load error are in `/api/state` under `qq.proactive.judgeModels`. `POST /api/qq/bot-settings` accepts `judgeModelsByProvider` (an object of provider to model id; an empty string resets that provider to its default) and returns `judgeModelsByProvider` plus each `judgeProviders[].model`. Interest decision logs record the provider and model snapshot the judgment actually ran on.
 
 ### Character card
 

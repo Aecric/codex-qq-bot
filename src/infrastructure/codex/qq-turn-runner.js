@@ -103,6 +103,10 @@ export function createQqCodexTurnRunner({
       return Promise.reject(error);
     }
     const replyScope = options.qqEvent ? getReplyScope(options.qqEvent) : null;
+    // A caller signal (for example an interest judge's deadline) cancels the
+    // turn as a stopped reply scope does: a queued turn leaves the queue and
+    // a running turn is interrupted instead of finishing in the background.
+    const signal = combineAbortSignals(options.signal, replyScope?.signal);
     return limiter.run(async () => {
       if (replyScope?.cancelled) throw createStoppedError();
       const startedAt = Date.now();
@@ -153,7 +157,7 @@ export function createQqCodexTurnRunner({
           shellAccess: Boolean(options.shellAccess),
           timeoutMs: options.timeout,
           replacementIdleTimeoutMs: options.replacementIdleTimeoutMs,
-          signal: replyScope?.signal,
+          signal,
           onDynamicToolCall: typeof options.onDynamicToolCall === "function"
             ? (...args) => runAgentToolCall(() => options.onDynamicToolCall(...args))
             : undefined,
@@ -224,7 +228,7 @@ export function createQqCodexTurnRunner({
         if (generationId && stoppedGenerationIds.delete(generationId)) throw createStoppedError();
         throw error;
       }
-    }, { signal: replyScope?.signal });
+    }, { signal });
   };
 }
 
@@ -321,4 +325,11 @@ function normalizedReplacementIdleTimeout(options) {
 
 function assertFunction(value, name) {
   if (typeof value !== "function") throw new TypeError(`${name} must be a function`);
+}
+
+function combineAbortSignals(...signals) {
+  const present = signals.filter((signal) => signal && typeof signal.addEventListener === "function");
+  if (present.length === 0) return undefined;
+  if (present.length === 1) return present[0];
+  return AbortSignal.any(present);
 }

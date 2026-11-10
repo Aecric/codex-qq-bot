@@ -173,6 +173,36 @@ Bot 只要有一个群气泡确认送达，就会清空该群送达前的普通�
 
 冷群和主动私聊检查会把判定开始前的真人消息边界持久化在 `data/qq-personas.json`。没有更新的真人消息时，`no_new_human_messages` 会阻止再次调用厂商，即使冷却已结束或 Hub 已重启；Bot 发言不计入。旧状态回退使用上次检查时间。空闲会话正常保持安静时，可在 `interest` 日志检查这个原因。
 
+## 昵称称呼灰度发布
+
+群文本里的昵称或别名不再直接呼叫 Bot：由一个小型别名称呼 judge 判断是不是对 Bot 说话（见[配置参考](CONFIGURATION_CN.md#昵称称呼)与[架构说明](ARCHITECTURE_CN.md)）。真正的 @、回复 Bot、私聊和拍一拍不受影响。请分阶段推出，让回归的影响尽量小。下面每次改动只需重启 Hub。
+
+1. **Shadow（旁路观察）。**设置 `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING=shadow`。昵称仍走旧的直接路线；judge 只记录它会怎么判，不多发任何 QQ 消息。用几天真实流量观察，并把 judge 的判定和 Bot 实际行为对照。
+2. **单群。**设置 `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING=judge` 和 `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING_GROUPS=群号`（多个群用逗号分隔）。只有列出的群使用 judge，其他群保持 `legacy`。
+3. **所有群。**保持 `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING=judge`（默认值），并清空 `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING_GROUPS`。
+
+查看位置：
+
+```bash
+curl -fsS --max-time 3 http://127.0.0.1:3789/api/state | jq '.qq.proactive.addressing, .qq.proactive.judgeModels'
+npm run ncc -- logs --category interest --operation addressing.alias_judge --tail 100
+```
+
+`qq.proactive.addressing` 显示当前生效的模式、灰度群和超时，以及按模式聚合的计数（总数、结果、对象、原因码、超时、无效输出、启发式兜底次数）和 Hub 启动以来的 judge 延迟 P50/P95。`qq.proactive.judgeModels` 显示兴趣厂商与模型、按厂商保存的模型，以及模型切换器的加载状态（目标、当前模型、最近一次加载错误）。`addressing.alias_judge` 日志只记录模式、结果、对象、原因码、厂商/模型、提示词版本和耗时，不含消息正文。
+
+回滚：
+
+- 设置 `CODEX_REMOTE_CONTACT_QQ_ALIAS_ROUTING=legacy` 并只重启 Hub，旧的子串路线立刻恢复，无需迁移任何数据。
+- 如果问题出在更小的本机 judge 模型上，当兴趣厂商是 `ollama` 时，用主人 QQ 命令 `/兴趣模型 gemma4:e4b-it-qat`，或在仪表盘“智能行为”页，把 Ollama 模型改回 Gemma（`gemma4:e4b-it-qat`）。模型按厂商分别记忆，其他厂商的模型不受影响。同时把它从 `config/local.env` 的 `CODEX_REMOTE_CONTACT_QQ_PROACTIVE_JUDGE_MODELS`（以及 `..._JUDGE_MODEL`）中删掉，否则重启会再次写入。Ollama 加载失败时会保留之前可用的模型。
+
+想在改动前离线比较 judge 模型，可用 `scripts/qq-addressing-replay.mjs` 把带标注的样本送过别名称呼 judge：
+
+```bash
+node scripts/qq-addressing-replay.mjs --input samples.jsonl --provider ollama --model qwen3.5:4b
+```
+
+它会报告直接呼叫的漏判率、误触发率、P50/P95 延迟、超时次数和无效 JSON 次数；`--mode heuristic` 与 `--mode legacy` 可在同一批样本上不用模型地对比确定性兜底和旧的子串路线，`--help` 列出全部选项（`codex` 厂商依赖 Hub，脚本不支持）。报告不会打印样本正文。样本文件含聊天内容，请放在仓库之外。
+
 ## 验收
 
 ```bash
@@ -298,6 +328,7 @@ npm run verify
 | `get_login_info` 401/403 | token 不一致 | 对齐 OneBot 与 Hub token，避免打印真实值 |
 | QQ 通道 false | OneBot 未连接、通道未启用或设置未保存 | 检查 `/api/state`、`data/settings.json` 和 `ncc connect` |
 | 白名单群不回复 | 群号不在 allowlist、未 @/回复 Bot、用户被 ban | 检查 state、`qq`/`onebot` 日志和权限 |
+| 叫昵称没反应，或只是被提到 Bot 却接话 | 别名称呼 judge 判为 `other`/`unclear`、超时，或该群仍在 `legacy`/`shadow` | 检查 `addressing.alias_judge` 日志和 `/api/state` 的 `qq.proactive.addressing`；见“昵称称呼灰度发布” |
 | Codex 回复失败 | 未登录、CLI 路径/模型不可用、队列满 | `codex --version`、登录状态、maintenance、`codex` 日志 |
 | 看图时出现 `CODEX_APP_SERVER_OUTPUT_LIMIT` | App Server 在多种协议事件中重复回传工具图片的 base64，耗尽普通输出的 8 MiB 预算 | 确认 Hub 已加载当前代码：本轮实际提供的图片数据 URL 单独计入每次工具结果最多四次回传的预算。文字、未知图片和未完成协议帧仍受限，重复调用编号不会补充预算。验证后只重启 Hub。 |
 | 主动兴趣不回复 | 周期为空、judge 关闭/失败、兴趣不足、结果过时 | `interest` 日志、当前厂商对应 key、模型参数和群活跃状态 |
