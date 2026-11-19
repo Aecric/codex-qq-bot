@@ -649,6 +649,23 @@ test("a frozen post-reply message batch enters one semantic interest review befo
   assert.match(payload.conversationFollowUpCandidate.decisionRule, /真实语义承接/);
 });
 
+test("engaged-window judge considers the addressee and whether a reply is still needed", async () => {
+  let systemPrompt;
+  await shouldProactivelyReplyToQq(event, proactiveState(), {
+    openRouterApiKey: "configured-for-test",
+    interestSignals: { engagedConversation: 3 },
+    fetch: async (_url, options) => {
+      systemPrompt = JSON.parse(options.body).messages[0].content;
+      return jsonJudgeResponse({ shouldReply: false, interest: 10 });
+    }
+  });
+
+  assert.match(systemPrompt, /窗口只表示需要观察/);
+  assert.match(systemPrompt, /发言对象、Bot 上一条的内容、最近消息和话题变化/);
+  assert.match(systemPrompt, /拿不准接收对象或是否仍在等待 Bot 回答时也应谨慎拒绝/);
+  assert.doesNotMatch(systemPrompt, /就必须批准|不要因为“话题已转走”/);
+});
+
 test("affirmative proactive decisions retain context images only for the formal reply", async () => {
   let requestBody;
   const result = await shouldProactivelyReplyToQq(event, proactiveState(), {
@@ -1128,4 +1145,17 @@ test("proactive judge keeps the caller's provider snapshot when live state switc
 
   assert.equal(request.url, "codex://local/chat/completions");
   assert.equal(request.body.model, "gpt-6-luna");
+});
+
+test("configured interest threshold controls proactive approval", async () => {
+  const helpers = {
+    openRouterApiKey: "configured-for-test",
+    fetch: async () => jsonJudgeResponse({ interest: 50 })
+  };
+  const low = proactiveState();
+  low.proactive.judge.minInterest = 40;
+  const high = proactiveState();
+  high.proactive.judge.minInterest = 60;
+  assert.equal((await shouldProactivelyReplyToQq(event, low, helpers)).ok, true);
+  assert.equal((await shouldProactivelyReplyToQq(event, high, helpers)).ok, false);
 });

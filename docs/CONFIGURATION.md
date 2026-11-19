@@ -255,6 +255,8 @@ Use the same token on both sides. Without one, the webhook trusts only requests 
 
 ### QQ behavior, interest and media
 
+The final ordinary group interest threshold is stored in `data/settings.json` as `qq.proactive.judge.minInterest`. Its range is 0–100 and its default is 20. It is compared with the interest score after the relationship multiplier, and takes effect when settings are saved.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `CODEX_REMOTE_CONTACT_QQ_ENHANCER` | `1` | Set `0` to disable the startup enhancement default |

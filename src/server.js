@@ -1409,7 +1409,9 @@ async function loadSettings() {
         if (Number.isFinite(Number(judge.timeoutMs))) {
           state.qq.proactive.judge.timeoutMs = Math.max(1500, Math.min(20000, Number(judge.timeoutMs)));
         }
-        state.qq.proactive.judge.minInterest = 20;
+        if (judge.minInterest != null && Number.isFinite(Number(judge.minInterest))) {
+          state.qq.proactive.judge.minInterest = Math.max(0, Math.min(100, Number(judge.minInterest)));
+        }
         if (Number.isFinite(Number(judge.maxRecentMessages))) {
           state.qq.proactive.judge.maxRecentMessages = Math.max(1, Math.min(12, Number(judge.maxRecentMessages)));
         }
@@ -6388,6 +6390,7 @@ function logQqProactiveInterestDecision(event, decision = {}) {
     modelShouldReply: judge.shouldReply,
     modelInterest: judge.interest,
     modelEffectiveInterest: judge.effectiveInterest,
+    modelMinInterest: decision.minInterest,
     interestMultiplier: judge.interestMultiplier,
     modelReason: judge.reason,
     modelDurationMs: judge.durationMs,

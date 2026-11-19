@@ -257,6 +257,8 @@ Hub 和 OneBot 两端 token 应一致。未配置 token 时，Webhook 仅信任 
 
 ### QQ 行为、兴趣与媒体
 
+普通群聊的最终兴趣阈值保存在 `data/settings.json` 的 `qq.proactive.judge.minInterest`，范围 0–100，默认 20。该值与关系系数调整后的兴趣分比较，保存设置后生效。
+
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `CODEX_REMOTE_CONTACT_QQ_ENHANCER` | `1` | 设为 `0` 关闭增强启动默认值 |

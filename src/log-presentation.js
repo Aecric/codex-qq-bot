@@ -616,6 +616,7 @@ const detailLabelsZh = Object.freeze({
   modelShouldReply: "模型是否回复",
   modelInterest: "模型兴趣",
   modelEffectiveInterest: "模型有效兴趣",
+  modelMinInterest: "模型兴趣阈值",
   modelSemanticIntent: "模型语义判断",
   modelReason: "模型理由",
   modelReplyStyle: "回复风格",

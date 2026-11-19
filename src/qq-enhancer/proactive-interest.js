@@ -215,6 +215,7 @@ export async function shouldProactivelyReplyToQq(event = {}, state = {}, helpers
         judgeEveryMinutes,
         triggerMode
       });
+      commonMeta.minInterest = judgeConfig.minInterest;
       if (!judgeConfig.enabled) {
         result = {
           ok: false,
@@ -1062,10 +1063,10 @@ function buildJudgeMessages(event, assessment, config, { formatRetry = false, im
         "【角色】你是 QQ Bot 的后台兴趣闸门。你只决定一段未 @ Bot 的群聊是否值得唤醒主模型；你不聊天、不写回复，也不指导主模型的措辞。",
         "【判断流程】",
         config.interestSignals?.engagedConversation
-          ? "【观察窗口，优先于下面第 3 步的时机修正】Bot 刚在本群被 @ 并参与了对话，Hub 正逐条送来之后的群消息（combinedInterestSignals.engagedConversation 是剩余条数）。只要这条是在直接对 Bot 说话或提问（换了新话题也算）、调侃或评价 Bot、回应 Bot 刚说的话、或接着 Bot 参与的话题，就必须批准，interest 至少 60；不要因为“话题已转走”“没有新接话点”“Bot 最近说得多”而拒绝这类消息。只有明显在和别人说话、与 Bot 无关的刷屏才拒绝。"
+          ? "【观察窗口】Bot 刚在本群参与过对话，Hub 正逐条送来之后的群消息（combinedInterestSignals.engagedConversation 是剩余条数）。窗口只表示需要观察，不表示这些消息都在对 Bot 说话或需要回复。逐条结合发言对象、Bot 上一条的内容、最近消息和话题变化判断；同一发送者、提到 Bot、话题相似都不足以单独证明在等 Bot 回复。话题已转给别人、已经结束、只是附和或没有新的回应必要时应保持沉默；拿不准接收对象或是否仍在等待 Bot 回答时也应谨慎拒绝。"
           : null,
-        "1. 结合当前消息、引用和最近上下文，还原真实语义与对象；不要按单个关键词猜。",
-        "2. 站在 Bot 已形成的兴趣与关系位置上，判断它是否产生了一个具体、非复述、值得说出来的反应。",
+        "1. 结合当前消息、引用和最近上下文，判断发言是在对 Bot、其他人还是全群说话；不要按单个关键词、同一发送者或 Bot 刚参与过对话来猜。明确指向其他人的对话应保持沉默。",
+        "2. 若可能是在回应 Bot，判断是否仍承接 Bot 上一条及其话题、是否仍等待 Bot 回应。话题切换、已有答案、连续附和或只是补充而无需回应时保持沉默。面向全群且没有指向 Bot 的消息，只有存在明确、自然的接话机会和具体贡献时才考虑主动参与。",
         config.conversationFollowUp?.candidate
           ? "当前是‘Bot 刚回复过同一发送者’的续聊候选批次。Hub 已按自适应分钟窗与条数上限收集；达到条数上限只停止扩充批次，仍要等连续 5 秒安静后才冻结，本批只允许这一次判断。你必须独立判断整批消息是否在语义上回答、补充、追问或自然回应 Bot 的上一条；时间、条数与统计只负责把批次送来审查，不是回复依据。若话题已转给别人、已切换新话题或只是面向全群的无关发言，必须拒绝。"
           : null,
@@ -1263,7 +1264,9 @@ function normalizeJudgeConfig(value = {}) {
     baseUrl: value?.baseUrl || getDefaultInterestModelBaseUrl(provider),
     model: value?.model || getDefaultInterestModel(provider),
     timeoutMs: Number(value?.timeoutMs || 6500),
-    minInterest: proactiveJudgeFinalMinInterest,
+    minInterest: value?.minInterest == null
+      ? proactiveJudgeFinalMinInterest
+      : clampNumber(value.minInterest, 0, 100, proactiveJudgeFinalMinInterest),
     judgeEveryMessages: normalizeJudgeEveryMessages(value?.judgeEveryMessages),
     judgeEveryMinutes: normalizeJudgeEveryMinutes(value?.judgeEveryMinutes),
     triggerMode: value?.triggerMode === "time" ? "time" : "message",
@@ -1336,6 +1339,7 @@ function buildDecision(reason, assessment, judge = null, meta = {}) {
     judgeEveryMinutes: meta.judgeEveryMinutes,
     triggerMode: meta.triggerMode,
     triggerReason: meta.triggerReason,
+    minInterest: meta.minInterest,
     interestKeywordMatch: meta.interestKeywordMatch || null,
     interestSignals: meta.interestSignals || null,
     relationshipInterest: meta.relationshipInterest || null,
