@@ -159,6 +159,9 @@ refactor with a behavior change.
 - Ordinary group messages are mention/reply driven unless a recognized command
   or the proactive-interest path authorizes a turn. Private messages use the
   normal reply path.
+- Group messages that @ another member stay in chat history without triggering
+  a reply. A real @Bot, a reply to the Bot, or a recognized command can still
+  trigger a reply on the same message.
 - Routing is DIRECT (real @Bot, reply to the Bot, private, poke), alias judge,
   JOIN (ordinary interest approval) or SILENT. A configured nickname in plain
   group text is only a candidate: `src/qq-addressing.js` runs a structured

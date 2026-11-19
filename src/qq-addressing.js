@@ -89,6 +89,12 @@ export function classifyQqProtocolAddress(event = {}) {
   return null;
 }
 
+export function isQqGroupAtToOtherMembers(event = {}) {
+  if (!event?.groupId || classifyQqProtocolAddress(event)) return false;
+  // OneBot's atTargets contains individual QQ IDs. An @all has no such ID.
+  return Array.isArray(event.atTargets) ? event.atTargets.length > 0 : Boolean(event.hasAtSegment);
+}
+
 export function resolveQqAddressing(event = {}, { aliases = [] } = {}) {
   const protocolSource = classifyQqProtocolAddress(event);
   const aliasHits = findQqAssistantAliasHits(event?.text, aliases);

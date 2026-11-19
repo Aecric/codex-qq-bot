@@ -1,3 +1,5 @@
+import { isQqGroupAtToOtherMembers } from "./qq-addressing.js";
+
 const runtimeVersion = 1;
 const maxGroups = 500;
 const maxPendingMessages = 1_000;
@@ -110,7 +112,7 @@ function normalizeEvent(value, groupId) {
     }))
     .filter((mention) => mention.userId)
     .slice(0, 16);
-  return {
+  const event = {
     type: "group_message",
     groupId,
     senderId: normalizeId(value.senderId) || "0",
@@ -134,6 +136,7 @@ function normalizeEvent(value, groupId) {
       time: Math.floor(observedAtMs / 1000)
     }
   };
+  return isQqGroupAtToOtherMembers(event) ? null : event;
 }
 
 function normalizeReplyContext(value) {

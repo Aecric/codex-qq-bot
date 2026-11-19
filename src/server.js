@@ -96,6 +96,7 @@ import {
   createQqAliasAddressJudgeCache,
   hasQqProtocolSelfAt,
   heuristicQqAliasAddressVerdict,
+  isQqGroupAtToOtherMembers,
   judgeQqAliasAddress,
   resolveQqAddressing,
   resolveQqAliasRoutingMode,
@@ -4684,6 +4685,9 @@ async function shouldRespondToQq(event) {
   if (isQqPokeEvent(event)) return { ok: true, reason: "Poked bot" };
   if (isAllowedQqCommandEvent(event)) {
     return { ok: true, reason: "QQ command" };
+  }
+  if (isQqGroupAtToOtherMembers(event)) {
+    return { ok: false, reason: "Group message mentions other members without addressing the bot" };
   }
   if (await hasPendingQqImageRequest(event)) {
     return { ok: true, reason: "Pending image request matched", triggerMode: "pending_image_request", inspectImages: true };

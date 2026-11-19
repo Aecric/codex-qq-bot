@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { normalizeOneBotEvent } from "../src/channels/qq/onebot-event.js";
 import {
   QQ_ADDRESS_SOURCES,
   QQ_ALIAS_ADDRESS_PROMPT_VERSION,
@@ -12,6 +13,7 @@ import {
   hasQqProtocolSelfAt,
   heuristicQqAliasAddressVerdict,
   isQqAddressedSource,
+  isQqGroupAtToOtherMembers,
   judgeQqAliasAddress,
   normalizeQqAliasAddressVerdict,
   normalizeQqAliasRoutingMode,
@@ -56,6 +58,26 @@ test("classifyQqProtocolAddress reads only protocol facts", () => {
   assert.equal(classifyQqProtocolAddress({}), null);
   assert.equal(classifyQqProtocolAddress(), null);
   assert.equal(classifyQqProtocolAddress(null), null);
+});
+
+test("a group reply with a real @ to another member cannot trigger chat", () => {
+  const reply = { type: "reply", data: { id: 42 } };
+  const text = { type: "text", data: { text: "小白说的那张图你看了吗" } };
+  const at = (qq) => ({ type: "at", data: { qq } });
+  const normalizeGroup = (...message) => normalizeOneBotEvent({
+    message_type: "group",
+    self_id: 10000,
+    group_id: 10001,
+    user_id: 10002,
+    message
+  });
+  const directedAtMember = normalizeGroup(reply, at("20003"), text);
+
+  assert.equal(isQqGroupAtToOtherMembers(directedAtMember), true);
+  assert.equal(isQqGroupAtToOtherMembers({ ...directedAtMember, replyContext: { isSelf: true } }), false);
+  assert.equal(isQqGroupAtToOtherMembers(normalizeGroup(reply, at("20003"), at("10000"), text)), false);
+  assert.equal(isQqGroupAtToOtherMembers(normalizeGroup(at("all"), text)), false);
+  assert.equal(isQqGroupAtToOtherMembers(normalizeGroup(text)), false);
 });
 
 test("classifyQqProtocolAddress ranks a real @ above a reply to the bot", () => {

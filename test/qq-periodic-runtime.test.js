@@ -16,8 +16,6 @@ const event = {
   senderName: "群昵称",
   text: "停机前的最后一条普通消息",
   selfId: "11111",
-  atTargets: ["22222"],
-  atMentions: [{ userId: "22222", name: "被艾特的人" }],
   proactiveObservedAtMs: Date.UTC(2026, 6, 18, 22, 0),
   proactiveSource: "onebot",
   raw: { message_id: "m-1" }
@@ -36,12 +34,29 @@ test("persists and restores an overdue ordinary-interest wall-clock cycle", () =
   assert.equal(restored.cycleStartedAtMs, startedAt);
   assert.equal(restored.event.text, "停机前的最后一条普通消息");
   assert.equal(restored.event.proactiveRestoredCatchUp, true);
-  assert.deepEqual(restored.event.atMentions, [{ userId: "22222", name: "被艾特的人" }]);
   assert.deepEqual(summarizeQqPeriodicRuntime(saved), {
     version: 1,
     ordinaryInterestPendingGroups: 1,
     ordinaryInterestPendingMessages: 3
   });
+});
+
+test("a group mention to another member is not restored as a proactive trigger", () => {
+  const latestEvent = { ...event, hasAtSegment: true, atTargets: ["22222"] };
+  const olderSnapshot = {
+    ordinaryInterestByGroupId: {
+      12345: {
+        pendingMessageCount: 3,
+        cycleStartedAt: "2026-07-18T21:55:00.000Z",
+        updatedAt: "2026-07-18T22:01:00.000Z",
+        latestEvent
+      }
+    }
+  };
+  assert.deepEqual(restoreQqOrdinaryInterestCycles(olderSnapshot), []);
+  assert.deepEqual(restoreQqOrdinaryInterestCycles(
+    updateQqOrdinaryInterestCycle({}, latestEvent, { pendingMessageCount: 3 })
+  ), []);
 });
 
 test("a completed or cleared cycle is not restored", () => {
