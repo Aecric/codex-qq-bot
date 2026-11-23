@@ -34,6 +34,18 @@ const engines = Object.freeze({
     selectModel: ({ claudeModel } = {}) => claudeModel || null,
     selectReasoningEffort: ({ ai, claudeReasoningEffort } = {}) => claudeReasoningEffort || ai?.reasoningEffort || null
   }),
+  agy: Object.freeze({
+    id: "agy",
+    name: "Antigravity CLI",
+    logLabel: "Antigravity CLI",
+    runtime: "agy-stream-json",
+    transport: "cli",
+    keyName: null,
+    reportsQuota: false,
+    modelCatalog: false,
+    selectModel: ({ agyModel } = {}) => agyModel || null,
+    selectReasoningEffort: () => null
+  }),
   // Reached over an OpenAI-compatible API instead of a local CLI.
   deepseek: Object.freeze({
     id: "deepseek",

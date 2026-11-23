@@ -242,6 +242,7 @@ a { color: var(--accent); }
 [data-engine="deepseek"] .engine-glyph::before { content: "DS"; }
 [data-engine="gemini"] .engine-glyph { background: var(--gemini-soft); color: var(--gemini); }
 [data-engine="gemini"] .engine-glyph::before { content: "Gm"; }
+[data-engine="agy"] .engine-glyph::before { content: "Ag"; }
 
 .engine-pill {
   display: inline-flex; align-items: center; gap: 7px;
@@ -266,6 +267,7 @@ a { color: var(--accent); }
 .engine-tag.claude { background: var(--claude-soft); color: var(--claude); }
 .engine-tag.deepseek { background: var(--deepseek-soft); color: var(--deepseek); }
 .engine-tag.gemini { background: var(--gemini-soft); color: var(--gemini); }
+.engine-tag.agy { background: var(--gemini-soft); color: var(--gemini); }
 
 /* ---------- Workspace ---------- */
 .workspace { min-width: 0; display: flex; flex-direction: column; }

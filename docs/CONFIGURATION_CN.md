@@ -196,7 +196,9 @@ Hub 会先识别 Codex 任务类型，再把上表的任务基础时限按当前
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `CODEX_REMOTE_CONTACT_AGENT_ENGINE` | `codex` | 驱动 Bot 的引擎：`codex`、`claude`、`deepseek` 或 `gemini`。仓库 `ncc engine` 和交互式 `ncc start` 会把它写进 `config/local.env` |
+| `CODEX_REMOTE_CONTACT_AGENT_ENGINE` | `codex` | 驱动 Bot 的引擎：`codex`、`claude`、`agy`、`deepseek` 或 `gemini`。仓库 `ncc engine` 和交互式 `ncc start` 会把它写进 `config/local.env` |
+| `AGY_CLI_PATH` | `agy` | Antigravity CLI 路径，需使用运行 Hub 的账号登录。仅支持文字聊天。 |
+| `CODEX_REMOTE_CONTACT_AGY_MODEL` | — | 可选模型 ID，省略时由 CLI 选择 |
 | `DEEPSEEK_API_KEY` | 空 | `deepseek` 引擎的 API Key，也供兴趣判断使用 |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | DeepSeek 接口地址，也供兴趣判断使用 |
 | `CODEX_REMOTE_CONTACT_DEEPSEEK_MODEL` | `deepseek-v4-pro` | `deepseek` 引擎的主模型 |

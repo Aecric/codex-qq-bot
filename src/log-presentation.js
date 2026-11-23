@@ -200,6 +200,8 @@ const messageTranslationsZh = Object.freeze({
   "Codex app-server turn finished": "Codex 可引导回复轮次完成",
   "Codex app-server turn failed": "Codex 可引导回复轮次失败",
   "Claude Code turn finished": "Claude Code 可引导回复轮次完成",
+  "Antigravity CLI turn finished": "Antigravity CLI 回复完成",
+  "Antigravity CLI turn failed": "Antigravity CLI 回复失败",
   "Agent model output captured": "智能体模型输出已记录",
   "QQ native Agent progress": "QQ 原生智能体进度已记录",
   "QQ Agent generation stopped": "QQ 智能体生成已停止",

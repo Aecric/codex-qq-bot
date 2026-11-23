@@ -600,6 +600,8 @@ const {
   agentToolTransport,
   agentLeanContext,
   qqBaseInstructionsMode,
+  agyPath,
+  agyModel,
   claudeCliPath,
   claudeModel,
   claudeReasoningEffort,
@@ -3656,7 +3658,7 @@ function normalizeMemoryEntries(entries, limit) {
 }
 
 function describeActiveAgent() {
-  return describeAgentEngine(agentEngine, { ai: state.ai, claudeModel, claudeReasoningEffort, deepseekModel, geminiAgentModel });
+  return describeAgentEngine(agentEngine, { ai: state.ai, agyModel, claudeModel, claudeReasoningEffort, deepseekModel, geminiAgentModel });
 }
 
 const agentCliVersionProbe = createAgentCliVersionProbe();
@@ -3665,11 +3667,11 @@ async function buildMaintenanceStatus({ force = false } = {}) {
   const activeAgent = describeActiveAgent();
   const usesClaude = activeAgent.engine === "claude";
   const usesChatApi = activeAgent.transport === "api";
-  const agentCliPath = usesClaude ? claudeCliPath : codexCliPath;
+  const agentCliPath = ({ claude: claudeCliPath, agy: agyPath })[activeAgent.engine] || codexCliPath;
   if (force && !usesChatApi) void agentCliVersionProbe.refresh(agentCliPath);
-  const [codexPathOk, claudePathOk, claudeConnection, quota] = await Promise.all([
+  const [codexPathOk, alternateCliPathOk, claudeConnection, quota] = await Promise.all([
     access(codexCliPath).then(() => true).catch(() => false),
-    usesClaude ? isExecutableOnPath(claudeCliPath) : null,
+    !usesChatApi && activeAgent.engine !== "codex" ? isExecutableOnPath(agentCliPath) : null,
     usesClaude ? detectClaudeConnection() : null,
     // Only an engine with a usage feed pays for reading it.
     activeAgent.reportsQuota ? getCachedCodexQuotaSnapshot({ force }) : state.maintenance.codex.quota,
@@ -3694,7 +3696,7 @@ async function buildMaintenanceStatus({ force = false } = {}) {
     agent: {
       ...activeAgent,
       // API engines have no CLI to find; the dashboard checks their key instead.
-      cliPathExists: usesChatApi ? null : usesClaude ? claudePathOk : codexPathOk,
+      cliPathExists: usesChatApi ? null : alternateCliPathOk ?? codexPathOk,
       cliVersion: usesChatApi ? null : agentCliVersionProbe.peek(agentCliPath),
       connection: usesChatApi ? "api" : claudeConnection,
       apiKeyConfigured: usesChatApi ? Boolean(qqChatApiConnections[activeAgent.engine].apiKey) : null,
@@ -13639,6 +13641,8 @@ const runSteerableQqCodexTurn = createQqCodexTurnRunner({
   state,
   codexPath: codexCliPath,
   engine: agentEngine,
+  agyPath,
+  agyModel,
   claudePath: claudeCliPath,
   claudeModel,
   claudeReasoningEffort,

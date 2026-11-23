@@ -103,7 +103,7 @@ export function createEnvironmentConfig(env = process.env) {
 
     agentEngine: enumValue(
       String(env.CODEX_REMOTE_CONTACT_AGENT_ENGINE || "").trim().toLowerCase(),
-      ["codex", "claude", "deepseek", "gemini"],
+      ["codex", "claude", "agy", "deepseek", "gemini"],
       "codex"
     ),
     // Codex serves QQ tools from a per-turn MCP server by default; "dynamic"
@@ -122,6 +122,8 @@ export function createEnvironmentConfig(env = process.env) {
       ["qq", "engine"],
       "engine"
     ),
+    agyPath: env.AGY_CLI_PATH || "agy",
+    agyModel: String(env.CODEX_REMOTE_CONTACT_AGY_MODEL || "").trim() || null,
     claudeCliPath: env.CLAUDE_CLI_PATH || "claude",
     claudeModel: String(env.CODEX_REMOTE_CONTACT_CLAUDE_MODEL || "").trim() || "opus",
     claudeReasoningEffort: enumValue(

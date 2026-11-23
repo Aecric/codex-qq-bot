@@ -1,7 +1,7 @@
 const HUB = location.protocol === "http:" || location.protocol === "https:" ? "" : "http://127.0.0.1:3789";
 const STORAGE_PREFIX = "codexRemoteContact.";
 const validViews = new Set(["overview", "channels", "intelligence", "memory", "knowledge", "activity", "settings"]);
-const engineNames = { codex: "Codex", claude: "Claude Code", deepseek: "DeepSeek", gemini: "Gemini" };
+const engineNames = { codex: "Codex", claude: "Claude Code", agy: "Antigravity CLI", deepseek: "DeepSeek", gemini: "Gemini" };
 
 const JUDGE_PROVIDER_IDS = ["openrouter", "deepseek", "custom", "codex", "ollama"];
 // Behavior controls that share one treatment: setting key -> form control id.

@@ -323,13 +323,14 @@ current_engine() {
   local engine
   engine="$(env_file_value "$LOCAL_ENV_FILE" CODEX_REMOTE_CONTACT_AGENT_ENGINE)"
   case "$engine" in
-    claude|deepseek|gemini) printf '%s' "$engine" ;;
+    claude|agy|deepseek|gemini) printf '%s' "$engine" ;;
     *) printf 'codex' ;;
   esac
 }
 
 engine_label() {
   case "$1" in
+    agy) printf 'Antigravity CLI' ;;
     claude) printf 'Claude Code' ;;
     deepseek) printf 'DeepSeek' ;;
     gemini) printf 'Gemini' ;;
@@ -340,8 +341,8 @@ engine_label() {
 set_engine() {
   local engine="${1:-}"
   case "$engine" in
-    codex|claude|deepseek|gemini) ;;
-    *) die "引擎只能是 codex、claude、deepseek 或 gemini。" ;;
+    codex|claude|agy|deepseek|gemini) ;;
+    *) die "引擎只能是 codex、claude、agy、deepseek 或 gemini。" ;;
   esac
   case "$engine" in
     deepseek|gemini)
@@ -368,13 +369,14 @@ choose_engine() {
   saved="$(current_engine)"
   [ -t 0 ] || return 0
   printf '\n选择这次使用的 AI 引擎（当前：%s）\n' "$(engine_label "$saved")"
-  printf '  1) Codex\n  2) Claude Code\n  3) DeepSeek（API）\n  4) Gemini（API）\n'
+  printf '  1) Codex\n  2) Claude Code\n  3) DeepSeek（API）\n  4) Gemini（API）\n  5) Antigravity CLI\n'
   printf '请选择 [回车沿用 %s]：' "$(engine_label "$saved")"
   read -r choice || true
   case "${choice:-}" in
     1|codex) set_engine codex ;;
     2|claude) set_engine claude ;;
     3|deepseek) set_engine deepseek ;;
+    5|agy) set_engine agy ;;
     4|gemini) set_engine gemini ;;
     "") log "沿用 $(engine_label "$saved")。" ;;
     *) log "未知选项，沿用 $(engine_label "$saved")。" ;;
@@ -383,7 +385,7 @@ choose_engine() {
 
 engine_menu() {
   printf '\n当前 AI 引擎：%s\n' "$(engine_label "$(current_engine)")"
-  printf '  1) Codex\n  2) Claude Code\n  3) DeepSeek（API）\n  4) Gemini（API）\n  0) 返回\n'
+  printf '  1) Codex\n  2) Claude Code\n  3) DeepSeek（API）\n  4) Gemini（API）\n  5) Antigravity CLI\n  0) 返回\n'
   printf '请选择：'
   local choice
   read -r choice || true
@@ -391,6 +393,7 @@ engine_menu() {
     1) set_engine codex ;;
     2) set_engine claude ;;
     3) set_engine deepseek ;;
+    5) set_engine agy ;;
     4) set_engine gemini ;;
     *) ;;
   esac
@@ -979,7 +982,7 @@ case "${1:-menu}" in
   logs) shift; print_logs "$@" ;;
   help|-h|--help)
     cat <<EOF
-用法：ncc [menu|first-run|status|codex-login|claude-login|engine [codex|claude]|qq|owner|groups|session|session-mode MODE [SCOPE]|ai-tasks|ai-run TASK [SCOPE] [--force] [--full] [--background]|avatars [status|refresh|describe]|branding|search-config|start|open|logs]
+用法：ncc [menu|first-run|status|codex-login|claude-login|engine [codex|claude|agy|deepseek|gemini]|qq|owner|groups|session|session-mode MODE [SCOPE]|ai-tasks|ai-run TASK [SCOPE] [--force] [--full] [--background]|avatars [status|refresh|describe]|branding|search-config|start|open|logs]
 首次直接运行 ncc：自动检测环境、安装依赖、验证并填写配置；完成后再运行为常规功能菜单。
 资源检测：ncc resources [--json] 预览本机 CPU、内存和启动预算；每次启动自动重新检测。
 头像识别：ncc avatars [status] | refresh [群号|private:QQ号] [--qq QQ号,...] [--force] | describe [群号|private:QQ号] [--qq QQ号,...] [--all] [--force] [--background]
@@ -990,7 +993,7 @@ EOF
     ;;
   *)
     cat <<EOF
-用法：ncc [menu|first-run|status|codex-login|claude-login|engine [codex|claude]|qq|owner|groups|session|session-mode MODE [SCOPE]|ai-tasks|ai-run TASK [SCOPE] [--force] [--full] [--background]|avatars [status|refresh|describe]|branding|search-config|start|open|logs]
+用法：ncc [menu|first-run|status|codex-login|claude-login|engine [codex|claude|agy|deepseek|gemini]|qq|owner|groups|session|session-mode MODE [SCOPE]|ai-tasks|ai-run TASK [SCOPE] [--force] [--full] [--background]|avatars [status|refresh|describe]|branding|search-config|start|open|logs]
 日志：ncc logs [--tail N] [-f] [--level LEVELS|--errors] [--category NAMES] [--trace ID] [--group ID] [--sender ID] [--search TEXT] [--since 30m|ISO] [--until ISO] [--slow [MS]] [--summary] [--json] [--all] [--verbose|--compact] [--plain|--color]
 项目目录：$PROJECT_DIR
 EOF
