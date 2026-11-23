@@ -2,6 +2,7 @@ import { runCodexAppServerTurn } from "../../codex-app-server-turn.js";
 import { buildIsolatedCodexChildEnv } from "../../codex-child-env.js";
 import { buildIsolatedClaudeChildEnv } from "../claude/claude-child-env.js";
 import { isClaudeThreadId, runClaudeCodeTurn } from "../claude/claude-code-turn.js";
+import { runAgyTurn } from "../agy/agy-turn.js";
 import { runChatApiTurn } from "../chat-api/chat-api-turn.js";
 import { runQqCodexTurnWithFusionRecovery } from "../../qq-codex-turn-recovery.js";
 import { summarizeProcessDiagnostics } from "../../process-diagnostics.js";
@@ -47,6 +48,14 @@ const qqAgentEngines = Object.freeze({
     buildConfig: (config) => config,
     resolveToolTransport: () => "mcp"
   }),
+  agy: Object.freeze({
+    ...getAgentEngine("agy"),
+    runTurn: runAgyTurn,
+    buildEnv: () => undefined,
+    canResume: () => false,
+    buildConfig: () => null,
+    resolveToolTransport: () => "none"
+  }),
   deepseek: chatApiEngine("deepseek"),
   gemini: chatApiEngine("gemini")
 });
@@ -66,6 +75,8 @@ export function createQqCodexTurnRunner({
   state,
   codexPath,
   engine = "codex",
+  agyPath = "agy",
+  agyModel = null,
   claudePath = "claude",
   claudeModel = null,
   claudeReasoningEffort = null,
@@ -116,13 +127,14 @@ export function createQqCodexTurnRunner({
       // A background task may pin its own model and effort (the local interest
       // judge runs on a small model) without touching the reply settings.
       const ai = options.aiOverride ? { ...state.ai, ...options.aiOverride } : state.ai;
-      const engineSettings = { ai, claudeModel, claudeReasoningEffort, deepseekModel, geminiAgentModel };
+      const engineSettings = { ai, agyModel, claudeModel, claudeReasoningEffort, deepseekModel, geminiAgentModel };
       const model = agent.selectModel(engineSettings);
       const reasoningEffort = agent.selectReasoningEffort(engineSettings);
       try {
         const requestedThreadId = (threadId) => agent.canResume(threadId) ? threadId : null;
         const runAttempt = (attempt = {}) => agent.runTurn({
           codexPath,
+          agyPath,
           claudePath,
           chatApiConnections,
           webSearch,

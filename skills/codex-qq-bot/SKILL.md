@@ -16,6 +16,8 @@ or Claude Code, chosen at startup. Treat it as a stateful local service: source
 code may change, but user configuration, runtime data, login state, secrets,
 and unrelated worktree changes must be preserved.
 
+For text chat through Antigravity CLI, sign in with `agy` as the Hub user, select `npm run ncc -- engine agy`, and restart the Hub. See the configuration reference for path and model overrides.
+
 ## Source priority
 
 Do not copy the full product manual into this skill. Read the authoritative

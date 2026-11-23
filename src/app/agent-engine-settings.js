@@ -18,6 +18,7 @@ const API_KEY_PATTERN = /^[\x21-\x7e]{1,512}$/;
 // saved settings, so it has nothing to edit here.
 const ENGINE_ENV = Object.freeze({
   codex: Object.freeze({}),
+  agy: Object.freeze({ model: "CODEX_REMOTE_CONTACT_AGY_MODEL", configModel: "agyModel" }),
   claude: Object.freeze({ model: "CODEX_REMOTE_CONTACT_CLAUDE_MODEL", configModel: "claudeModel" }),
   deepseek: Object.freeze({
     model: "CODEX_REMOTE_CONTACT_DEEPSEEK_MODEL",
@@ -143,7 +144,7 @@ export async function readAgentEngineSettings({ envFilePath, env = process.env, 
     canEdit,
     engines: AGENT_ENGINE_IDS.map((id) => {
       const names = ENGINE_ENV[id];
-      const description = describeAgentEngine(id, { ai, claudeModel: saved.claudeModel, deepseekModel: saved.deepseekModel, geminiAgentModel: saved.geminiAgentModel });
+      const description = describeAgentEngine(id, { ai, agyModel: saved.agyModel, claudeModel: saved.claudeModel, deepseekModel: saved.deepseekModel, geminiAgentModel: saved.geminiAgentModel });
       return {
         id,
         name: getAgentEngine(id).name,
