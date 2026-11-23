@@ -40,7 +40,7 @@ const translations = {
     connecting: "正在连接", waitingSync: "等待同步", quickActions: "快速操作", openQuickActions: "打开快速操作", refreshCurrent: "刷新当前页面", toggleTheme: "切换主题",
     hubUnavailable: "Hub 暂时不可用", offlineHint: "请确认本地服务已启动。", retry: "重试", manageChannels: "管理通道", openApi: "查看 API",
     runtimeSummary: "运行摘要", serviceHealth: "服务状态", serviceHealthHint: "Hub 与各个依赖的实时健康度", checkNow: "立即检查",
-    usageWindow: "Codex 用量", latencyTitle: "接口响应", waitingSamples: "等待首个样本", sampleCount: "最近 {count} 次采样", now: "现在",
+    usageWindow: "{engine} 用量", latencyTitle: "接口响应", waitingSamples: "等待首个样本", sampleCount: "最近 {count} 次采样", now: "现在",
     recentActivity: "最近活动", recentActivityHint: "最近的 QQ 消息与回复", openLogs: "查看日志", noRecentActivity: "还没有最近活动。",
     napcatSessionLostTitle: "QQ 连接断了，收不到消息", napcatSessionLostBody: "NapCat 还显示在线，但已经连不上 QQ 服务器。重启 NapCat 即可恢复；如果登录已失效，这里会接着显示二维码。", napcatRestart: "重启 NapCat", napcatRestarting: "正在重启 NapCat…", napcatLoginTitle: "QQ 掉线了，需要重新登录", napcatLoginBody: "打开手机 QQ，扫下面的二维码并确认。登录成功后这里会自动消失。", napcatLoginBodyAccount: "用机器人 QQ {account} 打开手机 QQ，扫二维码并确认。登录成功后这里会自动消失。", napcatLoggingInTitle: "正在登录 QQ", napcatLoggingInBody: "已经收到登录请求，请稍等；如果手机上还有确认提示，请点确认。", napcatDownTitle: "NapCat 没有响应", napcatDownBody: "暂时拿不到登录二维码。请先启动 NapCat（本机可运行 start-astra.sh），恢复后这里会显示二维码。", napcatNotConfiguredBody: "OneBot 连不上，也没有配置 NAPCAT_WEBUI_TOKEN，所以无法显示二维码。请到 NapCat 管理页扫码登录。", napcatAuthFailedBody: "NapCat WebUI 拒绝了当前 token，无法获取二维码。请检查 NAPCAT_WEBUI_TOKEN。", napcatLoginErrorPrefix: "NapCat 提示：{message}", napcatLoginWarning: "谁扫码，机器人就会登录成谁的 QQ，请用机器人账号扫。", napcatQrRefresh: "刷新二维码", napcatQrPending: "正在获取二维码…", napcatQrAlt: "QQ 登录二维码",
     systemReady: "一切正常", systemReadyBody: "所有服务在线，{engine} 随时可以回复消息。", systemAttention: "部分功能未启用", systemAttentionBody: "{items} 当前未启用，其余功能不受影响。", systemCritical: "有服务需要处理", systemCriticalBody: "{items} 状态异常，先看下方的服务详情。",
@@ -128,7 +128,7 @@ const translations = {
     connecting: "Connecting", waitingSync: "Waiting to sync", quickActions: "Quick actions", openQuickActions: "Open quick actions", refreshCurrent: "Refresh this page", toggleTheme: "Toggle theme",
     hubUnavailable: "Hub is unavailable", offlineHint: "Make sure the local service is running.", retry: "Retry", manageChannels: "Manage channels", openApi: "View API",
     runtimeSummary: "Runtime summary", serviceHealth: "Services", serviceHealthHint: "Live health of the Hub and its dependencies", checkNow: "Check now",
-    usageWindow: "Codex usage", latencyTitle: "API response", waitingSamples: "Waiting for the first sample", sampleCount: "Samples: {count}", now: "Now",
+    usageWindow: "{engine} usage", latencyTitle: "API response", waitingSamples: "Waiting for the first sample", sampleCount: "Samples: {count}", now: "Now",
     recentActivity: "Recent activity", recentActivityHint: "Latest QQ messages and replies", openLogs: "Open logs", noRecentActivity: "No recent activity yet.",
     napcatSessionLostTitle: "QQ connection lost, messages are not arriving", napcatSessionLostBody: "NapCat still reports online but cannot reach the QQ servers. Restarting NapCat restores it; if the login has expired, a QR code appears here next.", napcatRestart: "Restart NapCat", napcatRestarting: "Restarting NapCat…", napcatLoginTitle: "QQ is offline and needs to sign in again", napcatLoginBody: "Open QQ on your phone, scan the code and confirm. This card disappears once you are signed in.", napcatLoginBodyAccount: "Open QQ on your phone as the bot account {account}, scan the code and confirm. This card disappears once you are signed in.", napcatLoggingInTitle: "Signing in to QQ", napcatLoggingInBody: "The sign-in request was received. If your phone asks for confirmation, confirm it there.", napcatDownTitle: "NapCat is not responding", napcatDownBody: "The sign-in QR code is unavailable. Start NapCat first (run start-astra.sh on this machine); the code appears here once it is back.", napcatNotConfiguredBody: "OneBot is unreachable and NAPCAT_WEBUI_TOKEN is not configured, so no QR code can be shown. Sign in from the NapCat management page.", napcatAuthFailedBody: "The NapCat WebUI rejected the token, so no QR code can be fetched. Check NAPCAT_WEBUI_TOKEN.", napcatLoginErrorPrefix: "NapCat says: {message}", napcatLoginWarning: "Whoever scans this signs the bot in as their own QQ, so scan with the bot account.", napcatQrRefresh: "Refresh QR code", napcatQrPending: "Fetching the QR code…", napcatQrAlt: "QQ sign-in QR code",
     systemReady: "All systems normal", systemReadyBody: "Every service is online and {engine} is ready to reply.", systemAttention: "Some features are off", systemAttentionBody: "{items} disabled; everything else keeps working.", systemCritical: "A service needs attention", systemCriticalBody: "{items} unhealthy. Check the service details below.",
@@ -1227,25 +1227,34 @@ function renderQuota() {
     return;
   }
   section.hidden = false;
+  section.querySelector("h3").textContent = t("usageWindow", { engine: engine.name });
   if (!engine.reportsQuota) {
     $("#quotaUpdated").textContent = "";
-    section.querySelector("h3").textContent = t("usageWindow").replace("Codex", engine.name);
     setHtml($("#quotaOverview"), `<p class="quota-note">${escapeHtml(t("quotaNotReported", { engine: engine.name }))}</p>`);
     return;
   }
-  section.querySelector("h3").textContent = t("usageWindow");
-  const quota = app.maintenance?.codex?.quota;
+  const quota = app.maintenance?.agent?.quota
+    ?? (engine.engine === "codex" ? app.maintenance?.codex?.quota : null);
   $("#quotaUpdated").textContent = quota?.updatedAt ? t("recordedAt", { time: formatRelative(quota.updatedAt) }) : "";
   if (!quota?.available) {
     setHtml($("#quotaOverview"), `<p class="quota-note">${escapeHtml(t("quotaUnavailable"))}</p>`);
     return;
   }
-  const windows = [[t("fiveHours"), quota.primary], [t("sevenDays"), quota.secondary]].filter(([, value]) => value);
-  setHtml($("#quotaOverview"), windows.map(([label, value]) => {
-    const remaining = clampPercent(value.remainingPercent);
-    const tone = remaining <= 10 ? "bad" : remaining <= 30 ? "warn" : "";
-    return `<div class="quota-item ${tone}"><div class="quota-top"><span>${escapeHtml(label)}</span><strong>${escapeHtml(t("remaining", { value: remaining }))}</strong></div><div class="quota-bar" role="img" aria-label="${escapeHtml(`${label} ${t("remaining", { value: remaining })}`)}"><svg preserveAspectRatio="none"><rect x="0" y="0" height="6" width="${remaining}%" rx="3" /></svg></div><p>${escapeHtml(value.resetsAt ? t("resetsAt", { time: formatReset(value.resetsAt) }) : t("noReset"))}</p></div>`;
-  }).join("") || `<p class="quota-note">${escapeHtml(t("quotaUnavailable"))}</p>`);
+  const groups = Array.isArray(quota.groups) ? quota.groups : [quota];
+  const markup = groups.map((group) => {
+    const windows = [[t("fiveHours"), group.primary], [t("sevenDays"), group.secondary]];
+    const items = windows.filter(([, value]) => value).map(([label, value]) => renderQuotaWindow(label, value)).join("");
+    return items && group.name
+      ? `<section class="quota-group"><h4>${escapeHtml(group.name)}</h4>${items}</section>`
+      : items;
+  }).join("");
+  setHtml($("#quotaOverview"), markup || `<p class="quota-note">${escapeHtml(t("quotaUnavailable"))}</p>`);
+}
+
+function renderQuotaWindow(label, value) {
+  const remaining = clampPercent(value.remainingPercent);
+  const tone = remaining <= 10 ? "bad" : remaining <= 30 ? "warn" : "";
+  return `<div class="quota-item ${tone}"><div class="quota-top"><span>${escapeHtml(label)}</span><strong>${escapeHtml(t("remaining", { value: remaining }))}</strong></div><div class="quota-bar" role="img" aria-label="${escapeHtml(`${label} ${t("remaining", { value: remaining })}`)}"><svg preserveAspectRatio="none"><rect x="0" y="0" height="6" width="${remaining}%" rx="3" /></svg></div><p>${escapeHtml(value.resetsAt ? t("resetsAt", { time: formatReset(value.resetsAt) }) : t("noReset"))}</p></div>`;
 }
 
 function recordRuntimeSample(latencyMs) {

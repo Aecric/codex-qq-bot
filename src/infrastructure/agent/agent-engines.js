@@ -41,7 +41,7 @@ const engines = Object.freeze({
     runtime: "agy-stream-json",
     transport: "cli",
     keyName: null,
-    reportsQuota: false,
+    reportsQuota: true,
     modelCatalog: false,
     selectModel: ({ agyModel } = {}) => agyModel || null,
     selectReasoningEffort: () => null

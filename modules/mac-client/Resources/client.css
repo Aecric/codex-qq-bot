@@ -552,6 +552,8 @@ select { appearance: none; padding-right: 30px; background-image: linear-gradien
 .last-run .last-run-error { color: var(--bad-text); font-size: 12px; overflow-wrap: anywhere; }
 .quota-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
 .quota-list { display: grid; gap: 12px; }
+.quota-group { display: grid; gap: 12px; }
+.quota-group h4 { margin: 0; font-size: 13px; }
 .quota-item { display: grid; gap: 6px; }
 .quota-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
 .quota-top strong { font-variant-numeric: tabular-nums; }

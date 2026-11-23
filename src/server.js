@@ -427,6 +427,7 @@ import {
   formatAgentEngineSummary
 } from "./infrastructure/agent/agent-engines.js";
 import { createAgentCliVersionProbe } from "./infrastructure/agent/agent-cli-version.js";
+import { createAgyQuotaProbe } from "./infrastructure/agy/agy-quota.js";
 import {
   parseQqContextSummaryOutput,
   qqContextSummaryOutputSchema
@@ -3662,6 +3663,7 @@ function describeActiveAgent() {
 }
 
 const agentCliVersionProbe = createAgentCliVersionProbe();
+const agyQuotaProbe = createAgyQuotaProbe({ agyPath });
 
 async function buildMaintenanceStatus({ force = false } = {}) {
   const activeAgent = describeActiveAgent();
@@ -3669,12 +3671,11 @@ async function buildMaintenanceStatus({ force = false } = {}) {
   const usesChatApi = activeAgent.transport === "api";
   const agentCliPath = ({ claude: claudeCliPath, agy: agyPath })[activeAgent.engine] || codexCliPath;
   if (force && !usesChatApi) void agentCliVersionProbe.refresh(agentCliPath);
-  const [codexPathOk, alternateCliPathOk, claudeConnection, quota] = await Promise.all([
+  const [codexPathOk, alternateCliPathOk, claudeConnection, codexQuota] = await Promise.all([
     access(codexCliPath).then(() => true).catch(() => false),
     !usesChatApi && activeAgent.engine !== "codex" ? isExecutableOnPath(agentCliPath) : null,
     usesClaude ? detectClaudeConnection() : null,
-    // Only an engine with a usage feed pays for reading it.
-    activeAgent.reportsQuota ? getCachedCodexQuotaSnapshot({ force }) : state.maintenance.codex.quota,
+    activeAgent.engine === "codex" ? getCachedCodexQuotaSnapshot({ force }) : state.maintenance.codex.quota,
     checkOneBotHealth({ force })
   ]);
   const { qrImage: _qrImage, ...napcat } = await buildNapCatLoginStatus(await napCatLogin.readLogin());
@@ -3702,7 +3703,9 @@ async function buildMaintenanceStatus({ force = false } = {}) {
       apiKeyConfigured: usesChatApi ? Boolean(qqChatApiConnections[activeAgent.engine].apiKey) : null,
       apiHost: usesChatApi ? describeChatApiHost(qqChatApiConnections[activeAgent.engine].baseUrl) : null,
       ...agentRun,
-      queue
+      queue,
+      quota: activeAgent.engine === "agy" && alternateCliPathOk ? agyQuotaProbe.peek()
+        : activeAgent.engine === "codex" ? codexQuota : null
     },
     // Kept for existing controllers; the run fields mirror the agent above.
     codex: {
@@ -3720,7 +3723,7 @@ async function buildMaintenanceStatus({ force = false } = {}) {
         taskType,
         policy.timeoutMs
       ])),
-      quota
+      quota: codexQuota
     },
     channels: { qq: state.channels.qq },
     qq: {

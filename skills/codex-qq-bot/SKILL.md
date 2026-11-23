@@ -433,9 +433,15 @@ Claude invariants that must not be weakened:
   optional `~/.claude/ncc-profiles/active.env` profile, otherwise the machine's
   `claude` login is used.
 
-Claude Code has no image generation and no quota feed; the dashboard quota
-remains Codex-only. Each turn pays the `claude -p` cold start (15-20 s on this
-PRoot host), which counts against the task deadline.
+The dashboard reads the active engine quota from `/api/maintenance` under
+`agent.quota`. If Antigravity CLI quota is unavailable, run
+`agy --print /usage --output-format json` as the Hub user. The dashboard
+shows the reported 5-hour and weekly windows per model group. Codex quota
+saver uses the Codex account quota.
+
+Claude Code has no image generation or quota feed. Each turn pays the
+`claude -p` cold start (15-20 s on this PRoot host), which counts against the
+task deadline.
 
 ## Configuration and state
 
