@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  buildClaudeQqMcpConfig,
+  buildStdioQqMcpConfig,
   buildCodexQqMcpServerConfig,
   flattenQqDynamicTools,
   qqMcpBridgeScriptPath,
@@ -48,7 +48,7 @@ test("engine MCP configs launch the shared bridge with the per-turn socket", () 
   assert.equal(codex.default_tools_approval_mode, "approve");
   assert.ok(codex.tool_timeout_sec >= 120);
   assert.deepEqual(codex.env, launch.env);
-  assert.equal(buildClaudeQqMcpConfig(launch).mcpServers.qq.type, "stdio");
+  assert.equal(buildStdioQqMcpConfig(launch).mcpServers.qq.type, "stdio");
 });
 
 test("follow-up bubbles wait in proportion to their length", () => {

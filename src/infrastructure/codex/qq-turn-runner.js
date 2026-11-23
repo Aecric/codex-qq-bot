@@ -54,7 +54,7 @@ const qqAgentEngines = Object.freeze({
     buildEnv: () => undefined,
     canResume: () => false,
     buildConfig: () => null,
-    resolveToolTransport: () => "none"
+    resolveToolTransport: () => "mcp"
   }),
   deepseek: chatApiEngine("deepseek"),
   gemini: chatApiEngine("gemini")
