@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeDynamicToolResult } from "./agent-turn-process.js";
 
-// Engine-neutral MCP transport for the Hub's QQ tools. Both engines receive
-// the same per-turn stdio MCP server (qq-mcp-bridge.mjs); every call comes
+// Engine-neutral MCP transport for the Hub's QQ tools. CLI engines share
+// the per-turn stdio MCP server (qq-mcp-bridge.mjs); every call comes
 // back over a private Unix socket and runs through the Hub's
 // onDynamicToolCall dispatcher with the original sender's permissions. Codex
 // and Claude Code both defer MCP tool schemas behind their tool search, so a
@@ -170,7 +170,7 @@ export function buildCodexQqMcpServerConfig(launch, {
   };
 }
 
-export function buildClaudeQqMcpConfig(launch) {
+export function buildStdioQqMcpConfig(launch) {
   return {
     mcpServers: {
       [QQ_MCP_SERVER_NAME]: {

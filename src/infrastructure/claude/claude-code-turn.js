@@ -15,7 +15,7 @@ import {
 } from "../agent/agent-turn-process.js";
 import {
   QQ_MCP_SERVER_NAME,
-  buildClaudeQqMcpConfig,
+  buildStdioQqMcpConfig,
   flattenQqDynamicTools,
   startQqMcpToolServer,
   toMcpToolResult
@@ -541,7 +541,7 @@ function runClaudeCodeTurnOnce({
 export async function startClaudeToolBridge({ workDir, tools, onCall, getTurn = () => ({}) }) {
   const server = await startQqMcpToolServer({ workDir, tools, onCall, getTurn, callIdPrefix: "claude-call" });
   const mcpConfigPath = join(workDir, "mcp.json");
-  writeFileSync(mcpConfigPath, JSON.stringify(buildClaudeQqMcpConfig(server.launch)), { mode: 0o600 });
+  writeFileSync(mcpConfigPath, JSON.stringify(buildStdioQqMcpConfig(server.launch)), { mode: 0o600 });
   return { mcpConfigPath, close: () => server.close() };
 }
 
