@@ -43,22 +43,29 @@ test("agy stages validated QQ images in a private workspace with scoped read per
   await writeFile(agyPath, `#!/usr/bin/env node
 const fs = require("node:fs");
 const assert = require("node:assert/strict");
+const { join } = require("node:path");
 const args = process.argv.slice(2);
 const settings = JSON.parse(args[args.indexOf("--settings") + 1]);
 assert.equal(settings.toolPermission, "request-review");
 assert.equal(settings.allowNonWorkspaceAccess, false);
-assert.deepEqual(settings.permissions.allow, ["read_file(qq-image-1.png)"]);
+const staged = join(process.cwd(), "qq-image-1.png");
+assert.deepEqual(settings.permissions.allow, ["read_file(" + staged + ")"]);
 assert(settings.permissions.deny.includes("mcp(*)"));
 assert(settings.permissions.deny.includes("command(*)"));
 assert.deepEqual(fs.readdirSync("."), ["qq-image-1.png"]);
 assert.equal(fs.readFileSync("qq-image-1.png").toString("base64"), "${png}");
 const { message } = JSON.parse(fs.readFileSync(0, "utf8"));
-assert.match(message.content, /qq-image-1\\.png/);
+assert(message.content.includes("输入目录：" + process.cwd()));
+assert(message.content.includes("附件：" + staged));
+assert(!message.content.includes(${JSON.stringify(inputDir)}));
 assert.match(message.content, /看一下/);
 console.log(JSON.stringify({event:"result",result:{status:"SUCCESS",response:process.cwd()}}));
 `, { mode: 0o700 });
   const runTurn = selectQqAgentEngine("agy").runTurn;
-  const options = { cwd, agyPath, prompt: "看一下", imageInputDir: inputDir, imagePaths: [image] };
+  const options = {
+    cwd, agyPath, prompt: `输入目录：${inputDir}\n附件：${image}\n看一下`,
+    imageInputDir: inputDir, imagePaths: [image]
+  };
   const { finalResponse } = await runTurn(options);
   assert.notEqual(finalResponse, cwd);
   await assert.rejects(access(finalResponse), { code: "ENOENT" });
@@ -87,7 +94,7 @@ if (!fs.existsSync("attempted")) {
   assert.equal(result.finalResponse, "你好");
 });
 
-test("agy retries a cancelled tool turn in a fresh workspace without MCP tools", async (t) => {
+test("agy retries a cancelled tool turn or an empty result in a fresh workspace without MCP tools", async (t) => {
   const cwd = await mkdtemp(join(tmpdir(), "qq-agy-test-"));
   t.after(() => rm(cwd, { recursive: true, force: true }));
   const agyPath = join(cwd, "agy");
@@ -96,7 +103,8 @@ const fs = require("node:fs");
 const assert = require("node:assert/strict");
 const { message } = JSON.parse(fs.readFileSync(0, "utf8"));
 if (fs.existsSync(".agents/mcp_config.json")) {
-  console.log(JSON.stringify({event:"result",result:{status:"CANCELED",response:""}}));
+  const status = message.content.includes("empty result") ? "SUCCESS" : "CANCELED";
+  console.log(JSON.stringify({event:"result",result:{status,response:""}}));
 } else {
   const settings = JSON.parse(process.argv[process.argv.indexOf("--settings") + 1]);
   assert.equal(settings.toolPermission, "strict");
@@ -105,15 +113,17 @@ if (fs.existsSync(".agents/mcp_config.json")) {
   console.log(JSON.stringify({event:"result",result:{status:"SUCCESS",response:"你好"}}));
 }
 `, { mode: 0o700 });
-  const attempts = [];
-  const result = await selectQqAgentEngine("agy").runTurn({
-    cwd, agyPath, prompt: "hello",
-    dynamicTools: buildQqNativeToolSpecs({ isOwner: true }),
-    onDynamicToolCall: () => assert.fail("no tool should execute"),
-    onSpawn: (child) => attempts.push(child)
-  });
-  assert.equal(attempts.length, 2);
-  assert.equal(result.finalResponse, "你好");
+  for (const prompt of ["cancelled result", "empty result"]) {
+    const attempts = [];
+    const result = await selectQqAgentEngine("agy").runTurn({
+      cwd, agyPath, prompt,
+      dynamicTools: buildQqNativeToolSpecs({ isOwner: true }),
+      onDynamicToolCall: () => assert.fail("no tool should execute"),
+      onSpawn: (child) => attempts.push(child)
+    });
+    assert.equal(attempts.length, 2);
+    assert.equal(result.finalResponse, "你好");
+  }
 });
 
 test("agy exposes only QQ context queries and dispatches them through the turn's bridge", async (t) => {
