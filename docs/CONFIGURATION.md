@@ -195,7 +195,7 @@ The Hub classifies each Codex task and scales its base deadline by the current r
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `CODEX_REMOTE_CONTACT_AGENT_ENGINE` | `codex` | Engine that drives the bot: `codex`, `claude`, `agy`, `deepseek` or `gemini`. The repository `ncc engine` command and an interactive `ncc start` write it to `config/local.env` |
-| `AGY_CLI_PATH` | `agy` | Antigravity CLI executable. Sign in as the Hub user. Supports text chat and the `qq_context.history` and `qq_context.lookup` queries. Hub sender permissions apply. |
+| `AGY_CLI_PATH` | `agy` | Antigravity CLI executable. Sign in as the Hub user. Supports text and attached QQ images, plus the `qq_context.history` and `qq_context.lookup` queries. The Hub validates image files before granting read access to private copies and checks sender permissions for queries. |
 | `CODEX_REMOTE_CONTACT_AGY_MODEL` | — | Optional model ID. The CLI selects its default when omitted |
 | `DEEPSEEK_API_KEY` | empty | API key for the `deepseek` engine, also used by the interest judge |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | DeepSeek endpoint, also used by the interest judge |

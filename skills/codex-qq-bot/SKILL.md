@@ -16,7 +16,7 @@ or Claude Code, chosen at startup. Treat it as a stateful local service: source
 code may change, but user configuration, runtime data, login state, secrets,
 and unrelated worktree changes must be preserved.
 
-For text chat through Antigravity CLI, sign in with `agy` as the Hub user, select `npm run ncc -- engine agy`, and restart the Hub. The Hub exposes `qq_context.history` and `qq_context.lookup` in eligible turns and checks the original sender’s permissions. See the configuration reference for path and model overrides.
+For text and attached images through Antigravity CLI, sign in with `agy` as the Hub user, select `npm run ncc -- engine agy`, and restart the Hub. AGY reads validated copies of the turn's images from an isolated temporary workspace. The Hub exposes `qq_context.history` and `qq_context.lookup` in eligible turns and checks the original sender’s permissions. A headless tool-approval cancellation can retry once with the supplied context and without MCP. See the configuration reference for path and model overrides.
 
 ## Source priority
 
